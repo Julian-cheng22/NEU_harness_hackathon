@@ -1,0 +1,184 @@
+# ============================================================================
+# Defect contract.
+#
+# This file is the single source of truth binding three things together:
+#   schema.sql   -- where the defect lives
+#   generate.py  -- injects it (each defect has an `injector` function)
+#   questions.yaml -- at least one question exercises each defect
+#   tests/       -- asserts the anomaly is actually present in the loaded DB
+#
+# `detect_sql` is the assertion used by tests/test_defects.py. It must return
+# a single column named `n` that is > 0 when the defect is present.
+#
+# `naive_failure` describes what a model does WITHOUT the harness. That text is
+# what the per-defect eval breakdown is measuring. Keep it honest and specific.
+# ============================================================================
+
+defects:
+  - id: D1
+    title: Inconsistent field naming for the same concept
+    tables: [customers, subscriptions, invoices, support_tickets, deals]
+    columns:
+      - customers.customer_id
+      - subscriptions.customer_id
+      - invoices.cust_id
+      - support_tickets.cust_id
+      - deals.acct_id
+    naive_failure: >
+      Model assumes a single `customer_id` everywhere, writes a join on a column
+      that does not exist, and either errors or silently picks a wrong column.
+      `deals.acct_id` is the hard case: no lexical overlap with `customer_id`.
+    harness_tool: infer_joins
+    detect_sql: |
+      SELECT COUNT(*) AS n
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND column_name IN ('cust_id', 'acct_id');
+
+  - id: D2
+    title: Same column name, different value domain
+    tables: [invoices, deals, subscriptions]
+    columns: [invoices.status, deals.status, subscriptions.status]
+    naive_failure: >
+      Model learns `status='won'` from the deals context and reuses it against
+      invoices (or filters invoices with `status='active'`), returning 0 rows
+      and reporting "no data" instead of recognising the mismatch.
+    harness_tool: profile_column
+    detect_sql: |
+      SELECT COUNT(*) AS n FROM (
+        SELECT DISTINCT status FROM invoices
+        UNION
+        SELECT DISTINCT status FROM deals
+      ) t;
+
+  - id: D3
+    title: Stale denormalized copy disagrees with source of truth
+    tables: [customers, subscriptions, product_catalog]
+    columns: [customers.plan_tier, product_catalog.is_current]
+    truth:
+      customers.plan_tier: subscriptions.tier
+      product_catalog.is_current: product_catalog.effective_to IS NULL
+    naive_failure: >
+      Model reads `customers.plan_tier` because it is one join shallower, and
+      reports tier distributions that are wrong for ~18% of accounts.
+    harness_tool: profile_column
+    detect_sql: |
+      SELECT COUNT(*) AS n
+      FROM customers c
+      JOIN subscriptions s ON s.customer_id = c.customer_id
+      WHERE s.ended_on IS NULL
+        AND c.plan_tier IS NOT NULL
+        AND s.tier IS NOT NULL
+        AND c.plan_tier <> s.tier;
+
+  - id: D4
+    title: NULL carries two incompatible meanings
+    tables: [invoices]
+    columns: [invoices.paid_at]
+    naive_failure: >
+      Model treats `paid_at IS NULL` as "unpaid" and overstates outstanding
+      receivables, because some of those invoices have status='paid' -- the
+      payment webhook simply never backfilled the timestamp.
+    harness_tool: profile_column
+    detect_sql: |
+      SELECT COUNT(*) AS n
+      FROM invoices
+      WHERE paid_at IS NULL AND status = 'paid';
+
+  - id: D5
+    title: Numeric data stored as text, with non-numeric junk
+    tables: [usage_events]
+    columns: [usage_events.event_value]
+    naive_failure: >
+      Model writes SUM(event_value). MySQL coerces 'N/A' and '' to 0 WITHOUT
+      erroring, so the query succeeds and returns a plausible but wrong total.
+      This is the most dangerous defect precisely because nothing fails.
+    harness_tool: profile_column
+    detect_sql: |
+      SELECT COUNT(*) AS n
+      FROM usage_events
+      WHERE event_value IS NOT NULL
+        AND event_value NOT REGEXP '^[0-9]+(\\.[0-9]+)?$';
+
+  - id: D6
+    title: Duplicate entities under different surrogate keys
+    tables: [customers]
+    columns: [customers.company_name]
+    naive_failure: >
+      Model groups by customer_id and reports the same company twice, or picks
+      one of the two rows and undercounts that company's revenue by roughly half.
+    harness_tool: profile_column
+    detect_sql: |
+      SELECT COUNT(*) AS n FROM (
+        SELECT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', '')) AS k
+        FROM customers
+        GROUP BY k HAVING COUNT(*) > 1
+      ) t;
+
+  - id: D7
+    title: Mixed timezones with no timezone column
+    tables: [usage_events]
+    columns: [usage_events.event_ts, usage_events.source]
+    rule: "source='batch' rows are US/Eastern local; all other rows are UTC."
+    naive_failure: >
+      Model filters on a UTC day boundary and mis-buckets every batch-sourced
+      event by 4-5 hours, shifting daily aggregates and "last 24h" answers.
+    harness_tool: resolve_term
+    detect_sql: |
+      SELECT COUNT(*) AS n FROM usage_events WHERE source = 'batch';
+
+  - id: D8
+    title: Orphaned foreign keys, no constraints declared
+    tables: [support_tickets, customers]
+    columns: [support_tickets.cust_id]
+    naive_failure: >
+      Model INNER JOINs tickets to customers. Orphaned tickets vanish silently,
+      so ticket volume is understated and never reconciles with COUNT(*).
+    harness_tool: infer_joins
+    detect_sql: |
+      SELECT COUNT(*) AS n
+      FROM support_tickets t
+      LEFT JOIN customers c ON c.customer_id = t.cust_id
+      WHERE t.cust_id IS NOT NULL AND c.customer_id IS NULL;
+
+  - id: D9
+    title: Undocumented enum values beyond the documented range
+    tables: [churn_log]
+    columns: [churn_log.reason_code]
+    documented: {1: price, 2: missing_features, 3: support, 4: competitor}
+    actual_extra: {5: budget_cut, 6: acquired, 7: compliance, 8: migration, 9: unknown}
+    naive_failure: >
+      Model reads the column COMMENT (which stops at 4), then confidently labels
+      codes 5-9 as one of the four documented reasons or drops them entirely.
+    harness_tool: resolve_term
+    detect_sql: |
+      SELECT COUNT(*) AS n FROM churn_log WHERE reason_code > 4;
+
+  - id: D10
+    title: Mixed units and tax-inclusive vs tax-exclusive amounts
+    tables: [invoices, deals, subscriptions]
+    columns: [invoices.amount, invoices.currency_minor, deals.amount]
+    rule: >
+      invoices.amount is cents when currency_minor=1, dollars when 0, and
+      UNKNOWN when NULL (infer from magnitude: legacy biller rows are cents).
+      invoices.amount EXCLUDES tax. deals.amount INCLUDES tax, always dollars.
+    naive_failure: >
+      Model does SUM(invoices.amount) across both billers and inflates revenue
+      by ~100x on the cents rows, or compares deal value to invoiced revenue
+      without adjusting for tax and reports a fake discrepancy.
+    harness_tool: resolve_term
+    detect_sql: |
+      SELECT COUNT(*) AS n
+      FROM invoices
+      WHERE currency_minor IS NULL OR currency_minor = 1;
+
+# ---------------------------------------------------------------------------
+# Control group: questions tagged with no defect id should be answerable from
+# the raw DDL alone. If the harness does NOT beat baseline on these, that is
+# expected and fine -- it is the per-defect lift that we are claiming.
+# ---------------------------------------------------------------------------
+controls:
+  note: >
+    Keep 5-6 clean questions in questions.yaml with defect_ids: []. They guard
+    against the harness *hurting* simple cases, which is a real failure mode
+    when you stuff a small model's context with profiling output.

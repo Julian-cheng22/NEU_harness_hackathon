@@ -1,0 +1,24 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Model weights live on D:\models, never in the repo.
+*.gguf
+
+# Eval outputs are regenerated. Ignore the directory CONTENTS, not the
+# directory itself -- git does not descend into an ignored directory, so
+# `eval/out/` + `!eval/out/.gitkeep` would silently drop the negation.
+# The two result files below are committed on purpose: they are the evidence
+# behind the numbers quoted in the README.
+eval/out/*
+!eval/out/.gitkeep
+!eval/out/baseline-local.json
+!eval/out/harness-local.json
+
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
