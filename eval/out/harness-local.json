@@ -1,0 +1,782 @@
+{
+  "arm": "harness",
+  "provider": "local",
+  "summary": {
+    "total": 31,
+    "correct": 28,
+    "accuracy": 0.9032,
+    "by_defect": {
+      "D1": {
+        "n": 3,
+        "correct": 3
+      },
+      "D2": {
+        "n": 2,
+        "correct": 1
+      },
+      "D4": {
+        "n": 3,
+        "correct": 2
+      },
+      "D3": {
+        "n": 3,
+        "correct": 3
+      },
+      "D10": {
+        "n": 4,
+        "correct": 3
+      },
+      "D5": {
+        "n": 3,
+        "correct": 3
+      },
+      "D6": {
+        "n": 2,
+        "correct": 1
+      },
+      "D7": {
+        "n": 3,
+        "correct": 3
+      },
+      "D8": {
+        "n": 2,
+        "correct": 2
+      },
+      "D9": {
+        "n": 2,
+        "correct": 2
+      },
+      "control": {
+        "n": 6,
+        "correct": 6
+      }
+    },
+    "elapsed_s": 272.5
+  },
+  "records": [
+    {
+      "id": "Q01",
+      "arm": "harness",
+      "question": "How many support tickets were opened by customers in the Fintech industry?",
+      "defect_ids": [
+        "D1"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS ticket_count FROM support_tickets AS t JOIN customers AS c ON t.cust_id = c.customer_id WHERE c.industry = 'Fintech' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 10.6,
+      "usage": {
+        "completion_tokens": 325,
+        "prompt_tokens": 15665,
+        "total_tokens": 15990
+      }
+    },
+    {
+      "id": "Q02",
+      "arm": "harness",
+      "question": "What is the total value of won deals for each customer industry? Return industry and total.",
+      "defect_ids": [
+        "D1"
+      ],
+      "correct": true,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT c.industry, SUM(d.amount) AS total_won_deals FROM deals AS d JOIN customers AS c ON d.acct_id = c.customer_id WHERE d.status = 'won' GROUP BY c.industry ORDER BY total_won_deals DESC LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 9.04,
+      "usage": {
+        "completion_tokens": 286,
+        "prompt_tokens": 20777,
+        "total_tokens": 21063
+      }
+    },
+    {
+      "id": "Q03",
+      "arm": "harness",
+      "question": "Which account manager owns the most customers? Return their name and the count.",
+      "defect_ids": [
+        "D1"
+      ],
+      "correct": true,
+      "steps": 5,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT e.full_name, COUNT(*) AS customer_count FROM customers AS c JOIN employees AS e ON c.account_manager_id = e.employee_id GROUP BY e.employee_id, e.full_name ORDER BY customer_count DESC LIMIT 1",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 6.88,
+      "usage": {
+        "completion_tokens": 205,
+        "prompt_tokens": 25611,
+        "total_tokens": 25816
+      }
+    },
+    {
+      "id": "Q04",
+      "arm": "harness",
+      "question": "How many invoices are currently outstanding (unpaid)?",
+      "defect_ids": [
+        "D2",
+        "D4"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS count FROM invoices WHERE status = 'unpaid' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 4.29,
+      "usage": {
+        "completion_tokens": 136,
+        "prompt_tokens": 14337,
+        "total_tokens": 14473
+      }
+    },
+    {
+      "id": "Q05",
+      "arm": "harness",
+      "question": "How many deals have been won, and how many lost?",
+      "defect_ids": [
+        "D2"
+      ],
+      "correct": false,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT status, COUNT(*) AS count FROM deals GROUP BY status LIMIT 200",
+      "error": null,
+      "mismatch": "row count differs: gold 2, candidate 3 (gold[0]=('lost', 64.0), cand[0]=('lost', 64.0))",
+      "elapsed_s": 3.6,
+      "usage": {
+        "completion_tokens": 90,
+        "prompt_tokens": 14781,
+        "total_tokens": 14871
+      }
+    },
+    {
+      "id": "Q06",
+      "arm": "harness",
+      "question": "How many active subscriptions are on each plan tier?",
+      "defect_ids": [
+        "D3"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT tier, COUNT(*) AS active_count FROM subscriptions WHERE status = 'active' AND ended_on IS NULL GROUP BY tier ORDER BY tier LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 4.28,
+      "usage": {
+        "completion_tokens": 120,
+        "prompt_tokens": 14551,
+        "total_tokens": 14671
+      }
+    },
+    {
+      "id": "Q07",
+      "arm": "harness",
+      "question": "For how many customers does the cached plan_tier disagree with their live subscription tier?",
+      "defect_ids": [
+        "D3"
+      ],
+      "correct": true,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS disagree_count FROM customers AS c JOIN subscriptions AS s ON c.customer_id = s.customer_id WHERE s.ended_on IS NULL AND NOT c.plan_tier IS NULL AND c.plan_tier <> s.tier LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 14.18,
+      "usage": {
+        "completion_tokens": 470,
+        "prompt_tokens": 20830,
+        "total_tokens": 21300
+      }
+    },
+    {
+      "id": "Q08",
+      "arm": "harness",
+      "question": "What is the current list price of the Growth plan?",
+      "defect_ids": [
+        "D3"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT list_price_usd FROM product_catalog WHERE sku = 'SKU-GRW' AND effective_to IS NULL LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 3.45,
+      "usage": {
+        "completion_tokens": 96,
+        "prompt_tokens": 14502,
+        "total_tokens": 14598
+      }
+    },
+    {
+      "id": "Q09",
+      "arm": "harness",
+      "question": "How many invoices are marked paid but have no recorded payment timestamp?",
+      "defect_ids": [
+        "D4"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "profile_column",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM invoices WHERE status = 'paid' AND paid_at IS NULL LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 8.19,
+      "usage": {
+        "completion_tokens": 264,
+        "prompt_tokens": 15094,
+        "total_tokens": 15358
+      }
+    },
+    {
+      "id": "Q10",
+      "arm": "harness",
+      "question": "What is the total outstanding (unpaid) invoice amount, in US dollars?",
+      "defect_ids": [
+        "D4",
+        "D10"
+      ],
+      "correct": false,
+      "steps": 5,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT SUM(CASE WHEN currency_minor = 1 THEN amount / 100.0 ELSE amount END) AS total_outstanding_usd FROM invoices WHERE status = 'unpaid' LIMIT 200",
+      "error": null,
+      "mismatch": "gold=(340874.0,) cand=(1228508.0,)",
+      "elapsed_s": 9.59,
+      "usage": {
+        "completion_tokens": 302,
+        "prompt_tokens": 25900,
+        "total_tokens": 26202
+      }
+    },
+    {
+      "id": "Q11",
+      "arm": "harness",
+      "question": "What is the highest single usage value recorded in any event?",
+      "defect_ids": [
+        "D5"
+      ],
+      "correct": true,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT MAX(CAST(event_value AS DECIMAL(18, 4))) AS highest_usage FROM usage_events WHERE REGEXP_LIKE(event_value, '^[0-9]+(\\\\.[0-9]+)?$') LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 10.45,
+      "usage": {
+        "completion_tokens": 333,
+        "prompt_tokens": 21155,
+        "total_tokens": 21488
+      }
+    },
+    {
+      "id": "Q12",
+      "arm": "harness",
+      "question": "How many usage events have a non-numeric event_value?",
+      "defect_ids": [
+        "D5"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM usage_events WHERE NOT REGEXP_LIKE(event_value, '^[0-9]+(\\\\.[0-9]+)?$') LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 6.76,
+      "usage": {
+        "completion_tokens": 215,
+        "prompt_tokens": 14831,
+        "total_tokens": 15046
+      }
+    },
+    {
+      "id": "Q13",
+      "arm": "harness",
+      "question": "What is the average event value for the feature 'api.query'?",
+      "defect_ids": [
+        "D5"
+      ],
+      "correct": true,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT AVG(CAST(event_value AS DECIMAL(18, 4))) AS avg_event_value FROM usage_events WHERE feature_key = 'api.query' AND REGEXP_LIKE(event_value, '^[0-9]+(\\\\.[0-9]+)?$') LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 9.06,
+      "usage": {
+        "completion_tokens": 276,
+        "prompt_tokens": 21095,
+        "total_tokens": 21371
+      }
+    },
+    {
+      "id": "Q14",
+      "arm": "harness",
+      "question": "How many distinct companies are in the customer table? Companies appear under more than one record.",
+      "defect_ids": [
+        "D6"
+      ],
+      "correct": false,
+      "steps": 12,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT DISTINCT company_name FROM customers WHERE company_name LIKE '%Inc%' OR company_name LIKE '%Ltd%' LIMIT 200",
+      "error": "Hit the 12-step limit without a final answer.",
+      "mismatch": "row count differs: gold 1, candidate 7 (gold[0]=(121.0,), cand[0]=('Bluespire Labs Inc',))",
+      "elapsed_s": 61.58,
+      "usage": {
+        "completion_tokens": 2102,
+        "prompt_tokens": 76467,
+        "total_tokens": 78569
+      }
+    },
+    {
+      "id": "Q15",
+      "arm": "harness",
+      "question": "Which company names appear more than once after normalizing case and punctuation? Return the normalized name and how many records it has.",
+      "defect_ids": [
+        "D6"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', '')) AS normalized_name, COUNT(*) AS record_count FROM customers GROUP BY LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', '')) HAVING COUNT(*) > 1 ORDER BY record_count DESC LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 10.39,
+      "usage": {
+        "completion_tokens": 341,
+        "prompt_tokens": 14486,
+        "total_tokens": 14827
+      }
+    },
+    {
+      "id": "Q16",
+      "arm": "harness",
+      "question": "How many usage events occurred on 2026-08-15 in UTC?",
+      "defect_ids": [
+        "D7"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS event_count FROM usage_events WHERE DATE(CASE WHEN source = 'batch' THEN event_ts + INTERVAL '4' HOUR ELSE event_ts END) = '2026-08-15' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 8.52,
+      "usage": {
+        "completion_tokens": 252,
+        "prompt_tokens": 15005,
+        "total_tokens": 15257
+      }
+    },
+    {
+      "id": "Q17",
+      "arm": "harness",
+      "question": "How many usage events came from the batch source, and therefore need a timezone correction?",
+      "defect_ids": [
+        "D7"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS batch_event_count FROM usage_events WHERE source = 'batch' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 5.83,
+      "usage": {
+        "completion_tokens": 160,
+        "prompt_tokens": 14895,
+        "total_tokens": 15055
+      }
+    },
+    {
+      "id": "Q18",
+      "arm": "harness",
+      "question": "For each event source, what is the earliest and latest event timestamp after converting everything to UTC?",
+      "defect_ids": [
+        "D7"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT source, MIN(CASE WHEN source = 'batch' THEN event_ts + INTERVAL '4' HOUR ELSE event_ts END) AS earliest_event_utc, MAX(CASE WHEN source = 'batch' THEN event_ts + INTERVAL '4' HOUR ELSE event_ts END) AS latest_event_utc FROM usage_events GROUP BY source ORDER BY source LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 11.22,
+      "usage": {
+        "completion_tokens": 361,
+        "prompt_tokens": 15109,
+        "total_tokens": 15470
+      }
+    },
+    {
+      "id": "Q19",
+      "arm": "harness",
+      "question": "How many support tickets reference a customer record that no longer exists?",
+      "defect_ids": [
+        "D8"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS orphaned_ticket_count FROM support_tickets AS t LEFT JOIN customers AS c ON c.customer_id = t.cust_id WHERE c.customer_id IS NULL LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 6.43,
+      "usage": {
+        "completion_tokens": 201,
+        "prompt_tokens": 14905,
+        "total_tokens": 15106
+      }
+    },
+    {
+      "id": "Q20",
+      "arm": "harness",
+      "question": "What is the total number of support tickets, including any whose customer record is missing?",
+      "defect_ids": [
+        "D8"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS total_tickets FROM support_tickets LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 6.78,
+      "usage": {
+        "completion_tokens": 210,
+        "prompt_tokens": 14940,
+        "total_tokens": 15150
+      }
+    },
+    {
+      "id": "Q21",
+      "arm": "harness",
+      "question": "How many churn records use a reason code that is NOT documented in the schema?",
+      "defect_ids": [
+        "D9"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "get_schema",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM churn_log WHERE NOT reason_code IN (1, 2, 3, 4) LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 16.13,
+      "usage": {
+        "completion_tokens": 433,
+        "prompt_tokens": 21552,
+        "total_tokens": 21985
+      }
+    },
+    {
+      "id": "Q22",
+      "arm": "harness",
+      "question": "How many customers are still churned, i.e. they churned and have not been won back?",
+      "defect_ids": [
+        "D9"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(DISTINCT customer_id) FROM churn_log WHERE recovered_on IS NULL LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 6.35,
+      "usage": {
+        "completion_tokens": 195,
+        "prompt_tokens": 14619,
+        "total_tokens": 14814
+      }
+    },
+    {
+      "id": "Q23",
+      "arm": "harness",
+      "question": "What is the total invoiced revenue in US dollars, excluding voided invoices?",
+      "defect_ids": [
+        "D10"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT SUM(CASE WHEN currency_minor = 1 THEN amount / 100 WHEN currency_minor = 0 THEN amount WHEN issued_at < '2025-07-01' THEN amount / 100 ELSE amount END) AS total_revenue_usd FROM invoices WHERE status <> 'void' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 5.79,
+      "usage": {
+        "completion_tokens": 173,
+        "prompt_tokens": 14864,
+        "total_tokens": 15037
+      }
+    },
+    {
+      "id": "Q24",
+      "arm": "harness",
+      "question": "How many invoices are missing the currency unit flag?",
+      "defect_ids": [
+        "D10"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS missing_currency_flag FROM invoices WHERE currency_minor IS NULL LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 5.84,
+      "usage": {
+        "completion_tokens": 149,
+        "prompt_tokens": 14478,
+        "total_tokens": 14627
+      }
+    },
+    {
+      "id": "Q25",
+      "arm": "harness",
+      "question": "What is the total value of won deals, net of tax?",
+      "defect_ids": [
+        "D10"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT SUM(deals.amount / 1.08) AS total_net_value FROM deals WHERE deals.status = 'won' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 4.05,
+      "usage": {
+        "completion_tokens": 111,
+        "prompt_tokens": 14791,
+        "total_tokens": 14902
+      }
+    },
+    {
+      "id": "C01",
+      "arm": "harness",
+      "question": "How many employees are there in total?",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 2,
+      "tool_calls": [
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS total_employees FROM employees LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 2.87,
+      "usage": {
+        "completion_tokens": 85,
+        "prompt_tokens": 9369,
+        "total_tokens": 9454
+      }
+    },
+    {
+      "id": "C02",
+      "arm": "harness",
+      "question": "How many employees have left the company?",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS count FROM employees WHERE NOT left_on IS NULL LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 6.08,
+      "usage": {
+        "completion_tokens": 183,
+        "prompt_tokens": 14745,
+        "total_tokens": 14928
+      }
+    },
+    {
+      "id": "C03",
+      "arm": "harness",
+      "question": "What is the largest campaign budget?",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT MAX(budget_usd) AS largest_budget FROM campaigns LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 6.23,
+      "usage": {
+        "completion_tokens": 184,
+        "prompt_tokens": 19539,
+        "total_tokens": 19723
+      }
+    },
+    {
+      "id": "C04",
+      "arm": "harness",
+      "question": "Which industries are represented among customers? List them alphabetically.",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT DISTINCT industry FROM customers ORDER BY industry LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 3.46,
+      "usage": {
+        "completion_tokens": 91,
+        "prompt_tokens": 14815,
+        "total_tokens": 14906
+      }
+    },
+    {
+      "id": "C05",
+      "arm": "harness",
+      "question": "How many distinct product SKUs exist in the catalog?",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(DISTINCT sku) FROM product_catalog LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 2.76,
+      "usage": {
+        "completion_tokens": 79,
+        "prompt_tokens": 14289,
+        "total_tokens": 14368
+      }
+    },
+    {
+      "id": "C06",
+      "arm": "harness",
+      "question": "How many support tickets are marked priority P1?",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 2,
+      "tool_calls": [
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM support_tickets WHERE priority = 'P1' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 1.78,
+      "usage": {
+        "completion_tokens": 54,
+        "prompt_tokens": 9336,
+        "total_tokens": 9390
+      }
+    }
+  ]
+}
