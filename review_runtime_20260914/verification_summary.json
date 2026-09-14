@@ -1,0 +1,235 @@
+{
+  "original_files_checked": 41,
+  "changed_original_files": [],
+  "database_tables_unchanged": true,
+  "runs": {
+    "original_baseline": {
+      "correct": 20,
+      "total": 31,
+      "elapsed_s": 33.64,
+      "tokens": 51358,
+      "failed_questions": [
+        "Q05",
+        "Q07",
+        "Q08",
+        "Q10",
+        "Q11",
+        "Q12",
+        "Q13",
+        "Q16",
+        "Q18",
+        "Q23",
+        "Q25"
+      ],
+      "credited_with_error": []
+    },
+    "original_harness": {
+      "correct": 27,
+      "total": 31,
+      "elapsed_s": 235.52,
+      "tokens": 546956,
+      "failed_questions": [
+        "Q05",
+        "Q07",
+        "Q10",
+        "Q14"
+      ],
+      "credited_with_error": []
+    },
+    "fresh_baseline": {
+      "correct": 3,
+      "total": 8,
+      "elapsed_s": 10.67,
+      "tokens": 13382,
+      "failed_questions": [
+        "R01",
+        "R02",
+        "R03",
+        "R04",
+        "R05"
+      ],
+      "credited_with_error": []
+    },
+    "fresh_harness": {
+      "correct": 6,
+      "total": 8,
+      "elapsed_s": 44.62,
+      "tokens": 126156,
+      "failed_questions": [
+        "R02",
+        "R05"
+      ],
+      "credited_with_error": []
+    }
+  },
+  "fresh_independent_regrade": {
+    "baseline": {
+      "correct": 3,
+      "records": [
+        {
+          "id": "R01",
+          "strict_correct": false,
+          "shape_ok": true,
+          "rows": [
+            {
+              "avg_event_value": "197.9136"
+            }
+          ]
+        },
+        {
+          "id": "R02",
+          "strict_correct": false,
+          "shape_ok": true,
+          "rows": [
+            {
+              "total_paid_usd": "8913808.000000"
+            }
+          ]
+        },
+        {
+          "id": "R03",
+          "strict_correct": false,
+          "shape_ok": true,
+          "rows": [
+            {
+              "COUNT(*)": 85
+            }
+          ]
+        },
+        {
+          "id": "R04",
+          "strict_correct": false,
+          "shape_ok": true,
+          "rows": [
+            {
+              "list_price_usd": "99.00"
+            }
+          ]
+        },
+        {
+          "id": "R05",
+          "strict_correct": false,
+          "shape_ok": false,
+          "rows": []
+        },
+        {
+          "id": "R06",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "count": 17
+            }
+          ]
+        },
+        {
+          "id": "R07",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "COUNT(*)": 9
+            }
+          ]
+        },
+        {
+          "id": "R08",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "COUNT(*)": 187
+            }
+          ]
+        }
+      ]
+    },
+    "harness": {
+      "correct": 6,
+      "records": [
+        {
+          "id": "R01",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "avg_value": "198.07723689"
+            }
+          ]
+        },
+        {
+          "id": "R02",
+          "strict_correct": false,
+          "shape_ok": true,
+          "rows": [
+            {
+              "total_paid_usd": "8913808.000000"
+            }
+          ]
+        },
+        {
+          "id": "R03",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "COUNT(*)": 84
+            }
+          ]
+        },
+        {
+          "id": "R04",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "list_price_usd": "119.79"
+            }
+          ]
+        },
+        {
+          "id": "R05",
+          "strict_correct": false,
+          "shape_ok": false,
+          "rows": [
+            {
+              "lost_deal_count": 64,
+              "total_gross": "6819350.15",
+              "total_net": "6314213.101852"
+            }
+          ]
+        },
+        {
+          "id": "R06",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "COUNT(*)": 17
+            }
+          ]
+        },
+        {
+          "id": "R07",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "COUNT(*)": 9
+            }
+          ]
+        },
+        {
+          "id": "R08",
+          "strict_correct": true,
+          "shape_ok": true,
+          "rows": [
+            {
+              "COUNT(*)": 187
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

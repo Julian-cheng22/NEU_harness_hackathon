@@ -1,0 +1,42 @@
+{
+  "campaigns": {
+    "rows": 12,
+    "sha256": "9430d928a072a63be020ff0f3c27d4d6fb941b8a6e7edd66ad7bc0f9648fd010"
+  },
+  "churn_log": {
+    "rows": 49,
+    "sha256": "075f27b435640968dd987fafaedaedaa8333885645cd8553340be4bffe2c181c"
+  },
+  "customers": {
+    "rows": 128,
+    "sha256": "ab1af93d52a8323efe0099031a8882135fc60f95d299800276386e037e710d29"
+  },
+  "deals": {
+    "rows": 300,
+    "sha256": "494f16444914585a869048947bd2d8e405ee1169399aed97e4d7f97f0f1e21aa"
+  },
+  "employees": {
+    "rows": 40,
+    "sha256": "f6b6067bf1270c8fdf7c363e5638b1e9da251e01bf3715cf39bdca1196af5a49"
+  },
+  "invoices": {
+    "rows": 1902,
+    "sha256": "58ce3ee2479162937e72c317fb0b215610992640f9db00a767dfd0c91b454e30"
+  },
+  "product_catalog": {
+    "rows": 21,
+    "sha256": "df5dcb42f37cd65bd20bf0a91b0e10d99dee523bd2341b0cf3c8cf0fc3295c01"
+  },
+  "subscriptions": {
+    "rows": 128,
+    "sha256": "9175f7cd542ed37325de077dd2a26ed260203cd2c608e34259d006f5a106c4d2"
+  },
+  "support_tickets": {
+    "rows": 800,
+    "sha256": "a34e60977c7995fd2132e2da50a5f832b5802cf1009061becd3cfa38afcd7958"
+  },
+  "usage_events": {
+    "rows": 25000,
+    "sha256": "b95b3f4c85dec69ebea6f2b040bd7c1eafd5bd0babd0527a053c0164145e91bd"
+  }
+}
