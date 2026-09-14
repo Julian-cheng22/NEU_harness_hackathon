@@ -197,6 +197,52 @@ sparse-MoE architecture did not buy extra decode speed here. Plan accordingly.
 
 ---
 
+## The front end
+
+```powershell
+.venv\Scripts\python -m web.build_data     # bake eval results into the page
+.venv\Scripts\python -m web.server         # http://127.0.0.1:8000
+```
+
+One page, two independent halves.
+
+**The dashboard** renders the committed `eval/out/*.json`: the headline lift, the
+per-defect breakdown sorted by where the harness earns its keep, and every
+question one click from the gold SQL, what each arm actually wrote, and the
+harness tool trace. The control row is surfaced on the front page rather than in
+a footnote — if the harness ever scores *worse* on defect-free questions, the
+page says so in plain language.
+
+**The live panel** runs both arms against the real database and streams the
+agent's tool calls over SSE as they happen, baseline first. Picking one of the
+31 gold questions grades the result live; a free-text question is clearly marked
+ungraded, because there is no gold answer to compare it against.
+
+### It opens without the server
+
+`web/build_data.py` bakes the results into `web/static/data.js`, so
+`web/static/index.html` **opens by double-clicking** — no server, no database, no
+model, no network. That is deliberate: the measured numbers are already earned
+and must not depend on anything being up on demo day. The live panel detects it
+has no server and explains how to start one instead of failing silently.
+
+(A browser cannot `fetch()` a sibling JSON file from a `file://` origin — the
+origin is opaque, so CORS blocks it. A `<script src>` tag is not blocked, which
+is why the data arrives as a JS global rather than a `.json` fetch.)
+
+**Re-run `python -m web.build_data` after every `eval/run.py`**, or the offline
+copy will quietly show yesterday's numbers.
+
+### Security note
+
+`web/server.py` binds `127.0.0.1` and has **no authentication**. It executes
+model-written SQL and exposes whichever LLM provider is configured. `--host
+0.0.0.0` exists for demoing off a second laptop and prints a warning; do not
+leave it on a network you do not control. The read-only MySQL grant is still the
+layer doing the real enforcing.
+
+---
+
 ## Results
 
 Qwen3.5-9B Q4_K_M, local, 31 questions, execution-match grading:

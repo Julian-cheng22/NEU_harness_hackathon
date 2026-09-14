@@ -10,3 +10,9 @@ google-genai==0.3.0       # Gemini fallback path
 anthropic>=0.40.0         # Claude backend (haiku/sonnet) -- pipeline smoke tests
 rich==13.9.4              # eval report tables
 pytest==8.3.3
+
+# Web front end (web/server.py). Pure-Python wheels -- no compiler, so the
+# MacBook Airs stay happy. The dashboard itself needs none of these: it also
+# renders straight from the file system via web/build_data.py.
+fastapi==0.115.6
+uvicorn==0.34.0

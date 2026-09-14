@@ -22,7 +22,21 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
+
+# Optional observer for the web UI. The eval never passes one, so the default
+# is a no-op and the measured behaviour of both arms is unchanged -- a callback
+# that raises must not be able to fail a run that would otherwise have scored.
+EventFn = Callable[[dict[str, Any]], None]
+
+
+def _emit(on_event: EventFn | None, **payload: Any) -> None:
+    if on_event is None:
+        return
+    try:
+        on_event(payload)
+    except Exception:
+        pass
 
 from . import glossary, joins, profile, schema_card
 from .db import DbConfig
@@ -61,12 +75,14 @@ Reply with ONLY the SQL in a ```sql code block. No explanation.
 
 
 def run_baseline(llm: LLM, question: str, cfg: DbConfig | None = None,
-                 ddl: str | None = None) -> AgentResult:
+                 ddl: str | None = None, on_event: EventFn | None = None) -> AgentResult:
     """One shot, raw DDL, no tools, no retry."""
     cfg = cfg or DbConfig()
     ddl = ddl if ddl is not None else schema_card.render_raw_ddl(cfg)
 
     res = AgentResult(question=question)
+    _emit(on_event, type="prompting", arm="baseline",
+          detail=f"raw DDL ({len(ddl):,} chars), one shot, no tools")
     try:
         resp = llm.chat(
             [{"role": "system", "content": _BASELINE_SYSTEM.format(ddl=ddl)},
@@ -86,6 +102,7 @@ def run_baseline(llm: LLM, question: str, cfg: DbConfig | None = None,
         return res
 
     res.final_sql = sql
+    _emit(on_event, type="sql", arm="baseline", sql=sql)
     out = execute_sql(sql, cfg, skip_explain=True)
     if out["ok"]:
         res.rows = out["rows"]
@@ -223,6 +240,16 @@ class _ToolBox:
                 self.cfg, inferred_joins=joins.as_pairs(self.joins))
         return self._card
 
+    def reset(self) -> None:
+        """Forget the last query, keep the expensive schema/join cache.
+
+        The toolbox is deliberately shared across questions so the schema card
+        and join graph are computed once. `last_result` must NOT be shared: an
+        agent that fails to execute anything would otherwise be graded on the
+        PREVIOUS question's SQL, which reads as a real answer.
+        """
+        self.last_result, self.last_sql = None, ""
+
     def dispatch(self, name: str, args: dict[str, Any]) -> str:
         try:
             if name == "get_schema":
@@ -252,12 +279,17 @@ class _ToolBox:
 
 def run_harness(llm: LLM, question: str, cfg: DbConfig | None = None,
                 max_steps: int | None = None,
-                toolbox: _ToolBox | None = None) -> AgentResult:
+                toolbox: _ToolBox | None = None,
+                on_event: EventFn | None = None) -> AgentResult:
     cfg = cfg or DbConfig()
     max_steps = max_steps or int(os.getenv("AGENT_MAX_STEPS", "12"))
     box = toolbox or _ToolBox(cfg)
+    box.reset()
 
     res = AgentResult(question=question)
+    _emit(on_event, type="prompting", arm="harness",
+          detail=f"M-Schema card ({len(box.card):,} chars) + {len(TOOLS)} tools, "
+                 f"max {max_steps} steps")
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": _HARNESS_SYSTEM.format(schema=box.card)},
         {"role": "user", "content": _QUESTION_ANCHOR.format(question=question)},
@@ -288,6 +320,7 @@ def run_harness(llm: LLM, question: str, cfg: DbConfig | None = None,
                     out = execute_sql(sql, cfg)
                     if out["ok"]:
                         box.last_result, box.last_sql = out, sql
+            _emit(on_event, type="answer", arm="harness", text=resp.text)
             break
 
         messages.append({
@@ -301,7 +334,14 @@ def run_harness(llm: LLM, question: str, cfg: DbConfig | None = None,
         })
         for tc in resp.tool_calls:
             res.tool_calls.append(tc.name)
+            _emit(on_event, type="tool_call", arm="harness", step=res.steps,
+                  name=tc.name, args=tc.arguments)
             content = box.dispatch(tc.name, tc.arguments)
+            # The raw tool output is emitted verbatim; the UI decides how much
+            # to show. Truncating here would hide exactly the evidence the
+            # demo exists to display.
+            _emit(on_event, type="tool_result", arm="harness", step=res.steps,
+                  name=tc.name, content=content)
             if res.steps >= warn_at:
                 remaining = max_steps - res.steps
                 content += (
@@ -319,6 +359,7 @@ def run_harness(llm: LLM, question: str, cfg: DbConfig | None = None,
     if box.last_result is not None:
         res.final_sql = box.last_sql
         res.rows = box.last_result["rows"]
+        _emit(on_event, type="sql", arm="harness", sql=res.final_sql)
     elif not res.error:
         res.error = "Agent never executed a successful query."
     return res
