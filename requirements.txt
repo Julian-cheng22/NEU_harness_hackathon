@@ -6,7 +6,9 @@ python-dotenv==1.0.1
 PyYAML==6.0.2
 sqlglot==25.24.0          # parse/validate generated SQL before it touches the DB
 httpx==0.27.2             # llama.cpp OpenAI-compatible client
-google-genai==0.3.0       # Gemini fallback path
+google-genai==2.23.0      # Gemini fallback path. 0.3.0 predates the Client/
+                          # types API this repo is written against, and the
+                          # Sept-2026 auth-key migration -- do not pin back.
 anthropic>=0.40.0         # Claude backend (haiku/sonnet) -- pipeline smoke tests
 rich==13.9.4              # eval report tables
 pytest==8.3.3

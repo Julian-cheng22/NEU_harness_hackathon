@@ -141,7 +141,37 @@ class LocalLLM:
 # Fallback: Gemini
 # ---------------------------------------------------------------------------
 class GeminiLLM:
+    """Gemini backend.
+
+    Like the Anthropic one, this is a real ADAPTER. The rest of the harness
+    speaks the OpenAI message/tool shape, and Gemini differs in three ways that
+    all have to be handled or the harness arm silently degrades to the baseline:
+
+      * `system` is config (`system_instruction`), not a message.
+      * An assistant's tool call is a `function_call` PART on a role="model"
+        turn -- not a separate `tool_calls` field.
+      * A tool result is a `function_response` part on a role="user" turn, keyed
+        by function NAME (Gemini has no tool-call ids). Consecutive results
+        merge into one turn.
+
+    The previous version flattened every non-user message to a plain text
+    role="model" turn. That drops the model's own function calls from the
+    history and feeds tool output back as if the model had said it, so the
+    agent loop cannot see what it called or what came back -- it would burn
+    steps and converge to a one-shot answer. Tool calling is the entire harness
+    arm, so this path has to be right.
+
+    KEY TYPE: since September 2026 the Gemini API rejects legacy "standard"
+    keys. Create the key in AI Studio (aistudio.google.com/apikey), which issues
+    a service-account-bound "auth key" and restricts it to the Gemini API by
+    default. The Cloud console's Credentials page still makes standard keys.
+    """
+
     name = "gemini"
+
+    # Flash, because this project's premise is helping a SMALL model. Override
+    # with GEMINI_MODEL; health() lists what the key can actually reach.
+    DEFAULT_MODEL = "gemini-3.8-flash"
 
     def __init__(self, api_key: str | None = None, model: str | None = None):
         from google import genai  # imported lazily: local-only runs need no key
@@ -152,45 +182,132 @@ class GeminiLLM:
                 "GEMINI_API_KEY is not set. Either export it or run with "
                 "HARNESS_LLM=local."
             )
-        self.model = model or os.getenv("GEMINI_MODEL", "gemini-3-flash")
+        self.model = model or os.getenv("GEMINI_MODEL", self.DEFAULT_MODEL)
         self._client = genai.Client(api_key=key)
+
+    @staticmethod
+    def _convert_tools(tools: list[dict[str, Any]] | None) -> list:
+        from google.genai import types
+        if not tools:
+            return []
+        decls = []
+        for t in tools:
+            fn = t.get("function", t)
+            params = fn.get("parameters") or {"type": "object", "properties": {}}
+            # Gemini rejects an empty `properties` with no `type`; our no-arg
+            # tools (get_schema, infer_joins) hit exactly that.
+            params.setdefault("type", "object")
+            params.setdefault("properties", {})
+            decls.append(types.FunctionDeclaration(
+                name=fn["name"],
+                description=fn.get("description", ""),
+                parameters=params,
+            ))
+        return [types.Tool(function_declarations=decls)]
+
+    @staticmethod
+    def _convert_messages(messages: list[dict[str, Any]]) -> tuple[str, list]:
+        """OpenAI-shaped history -> (system_instruction, gemini contents)."""
+        from google.genai import types
+
+        system_parts: list[str] = []
+        contents: list = []
+        names_by_id: dict[str, str] = {}
+        pending: list = []      # function_response parts awaiting one user turn
+
+        def flush() -> None:
+            if pending:
+                contents.append(types.Content(role="user", parts=list(pending)))
+                pending.clear()
+
+        for m in messages:
+            role = m.get("role")
+            if role == "system":
+                flush()
+                if m.get("content"):
+                    system_parts.append(str(m["content"]))
+            elif role == "user":
+                flush()
+                contents.append(types.Content(
+                    role="user", parts=[types.Part(text=str(m.get("content") or ""))]))
+            elif role == "assistant":
+                flush()
+                parts = []
+                if m.get("content"):
+                    parts.append(types.Part(text=str(m["content"])))
+                for tc in m.get("tool_calls") or []:
+                    fn = tc.get("function", {}) or {}
+                    name = fn.get("name", "")
+                    names_by_id[tc.get("id", "")] = name
+                    parts.append(types.Part(function_call=types.FunctionCall(
+                        name=name, args=_safe_json(fn.get("arguments")))))
+                if parts:
+                    contents.append(types.Content(role="model", parts=parts))
+            elif role == "tool":
+                # Gemini matches results to calls by name, not id.
+                name = m.get("name") or names_by_id.get(m.get("tool_call_id", ""), "")
+                pending.append(types.Part(function_response=types.FunctionResponse(
+                    name=name, response={"result": str(m.get("content") or "")})))
+        flush()
+        return "\n\n".join(system_parts), contents
 
     def chat(self, messages, tools=None, temperature: float = 0.0) -> LLMResponse:
         from google.genai import types
 
-        system = "\n\n".join(m["content"] for m in messages
-                             if m.get("role") == "system" and m.get("content"))
-        contents = [
-            types.Content(role="user" if m["role"] == "user" else "model",
-                          parts=[types.Part(text=str(m.get("content") or ""))])
-            for m in messages if m.get("role") in ("user", "assistant", "tool")
-        ]
-
+        system, contents = self._convert_messages(messages)
         cfg: dict[str, Any] = {"temperature": temperature}
         if system:
             cfg["system_instruction"] = system
-        if tools:
-            cfg["tools"] = [types.Tool(function_declarations=[
-                types.FunctionDeclaration(
-                    name=t["function"]["name"],
-                    description=t["function"].get("description", ""),
-                    parameters=t["function"].get("parameters", {}),
-                ) for t in tools
-            ])]
+        converted = self._convert_tools(tools)
+        if converted:
+            cfg["tools"] = converted
 
         resp = self._client.models.generate_content(
             model=self.model, contents=contents,
             config=types.GenerateContentConfig(**cfg),
         )
 
+        text_parts: list[str] = []
         calls: list[ToolCall] = []
         for i, part in enumerate(_parts(resp)):
             fc = getattr(part, "function_call", None)
             if fc:
-                calls.append(ToolCall(id=f"call_{i}", name=fc.name,
+                calls.append(ToolCall(id=fc.id or f"call_{i}", name=fc.name,
                                       arguments=dict(fc.args or {})))
+            elif getattr(part, "text", None):
+                text_parts.append(part.text)
 
-        return LLMResponse(text=(resp.text or "").strip(), tool_calls=calls)
+        # Read parts rather than resp.text: the convenience accessor warns or
+        # raises when the turn is function calls with no prose.
+        usage: dict[str, int] = {}
+        um = getattr(resp, "usage_metadata", None)
+        if um:
+            usage = {"prompt_tokens": um.prompt_token_count or 0,
+                     "completion_tokens": um.candidates_token_count or 0,
+                     "total_tokens": um.total_token_count or 0}
+
+        return LLMResponse(text="\n".join(text_parts).strip(),
+                           tool_calls=calls, usage=usage)
+
+    def health(self) -> tuple[bool, str]:
+        """Pre-flight that costs no generation quota.
+
+        models.list() is a metadata call, so this validates the key AND that
+        the configured model is actually reachable by it without spending a
+        single token. Model availability varies by tier, so a wrong id should
+        fail here with the real options rather than mid-eval.
+        """
+        try:
+            names = [(m.name or "").replace("models/", "", 1)
+                     for m in self._client.models.list()]
+        except Exception as e:
+            return False, f"Gemini unreachable ({type(e).__name__}): {e}"
+
+        if self.model not in names:
+            flash = sorted(n for n in names if "flash" in n)
+            return False, (f"key works, but model {self.model!r} is not available to it. "
+                           f"Flash models offered: {', '.join(flash[:8]) or '(none)'}")
+        return True, f"Gemini reachable; model={self.model}"
 
 
 def _parts(resp) -> list:
@@ -372,3 +489,49 @@ def from_env() -> LLM:
         return AnthropicLLM()
     raise ValueError(
         f"Unknown HARNESS_LLM={provider!r}; expected 'local', 'gemini' or 'anthropic'.")
+
+
+def _main() -> int:
+    """Pre-flight the configured provider:  python -m harness.llm
+
+    Checks the credential and, for Gemini, lists the models the key can
+    actually reach -- model ids change often enough that guessing one and
+    discovering it mid-eval is a waste of a demo slot. Costs no generation
+    quota. Never prints the key.
+    """
+    from pathlib import Path
+
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+    provider = os.getenv("HARNESS_LLM", "local")
+    print(f"HARNESS_LLM={provider}")
+    try:
+        client = from_env()
+    except Exception as e:
+        print(f"  could not initialise: {e}")
+        return 1
+
+    print(f"  model={getattr(client, 'model', '?')}")
+    if hasattr(client, "health"):
+        ok, msg = client.health()
+        print(f"  {'OK ' if ok else 'FAIL'} {msg}")
+        if not ok:
+            return 1
+
+    if isinstance(client, GeminiLLM):
+        try:
+            names = sorted((m.name or "").replace("models/", "", 1)
+                           for m in client._client.models.list())
+            flash = [n for n in names if "flash" in n]
+            print(f"  {len(names)} models reachable; {len(flash)} flash:")
+            for n in flash:
+                print(f"    {n}{'   <- configured' if n == client.model else ''}")
+        except Exception as e:
+            print(f"  could not list models: {e}")
+            return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(_main())

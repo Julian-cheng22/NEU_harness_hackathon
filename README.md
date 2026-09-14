@@ -170,8 +170,39 @@ Pick a model with `HARNESS_LLM`:
 | Value | Backend | Needs |
 |---|---|---|
 | `local` | llama.cpp on :8080 (Qwen3.5-9B) | the GGUF + a running `llama-server` |
-| `gemini` | Gemini 3 Flash | `GEMINI_API_KEY` |
+| `gemini` | Gemini Flash (`GEMINI_MODEL`, default `gemini-3.8-flash`) | `GEMINI_API_KEY` |
 | `anthropic` | Claude Haiku 4.5 / Sonnet 5 | `ANTHROPIC_API_KEY` |
+
+Pre-flight whichever you picked before you need it:
+
+```powershell
+.venv\Scripts\python -m harness.llm
+```
+
+It validates the credential and, for Gemini, lists the models your key can
+actually reach. That call spends no generation quota and never prints the key.
+
+### Gemini keys
+
+**Create the key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey),
+not in the Cloud console's Credentials page.** Since September 2026 the Gemini
+API rejects the legacy *standard* keys that page issues. AI Studio issues
+*auth keys*: bound to a service account, restricted to the Gemini API by
+default, with faster leaked-key enforcement. Nothing changes in how the key is
+passed — still `GEMINI_API_KEY`.
+
+Two things that cost real money if you assume otherwise:
+
+- The **$300 Cloud Welcome / free-trial credit does not cover Gemini API
+  usage** for billing accounts created after 2026-03-02. Linking billing means
+  Gemini calls hit your payment method from the first request. The free tier
+  needs no billing account and is ample for a 31-question run — that is what
+  this project assumes.
+- Rate limits are **per project, not per key.** A second key in the same
+  project buys no extra quota.
+
+Model ids move quickly and availability varies by tier, so treat the default as
+a starting point and confirm with `python -m harness.llm`.
 
 ### Local model
 
