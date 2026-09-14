@@ -54,7 +54,25 @@ async function boot() {
   buildRunPicker();
   renderAll();
   wireUi();
-  checkLive();
+  await checkLive();
+  applyDeepLink();
+}
+
+/* Deep link:  #ask=Q11  or  #ask=any%20free%20text
+   Opens straight into the live panel and runs it. Worth having on stage --
+   you land on the exact question you meant to show instead of scrolling a
+   31-row list and picking the wrong one in front of an audience. */
+function applyDeepLink() {
+  const m = /(?:^|[#&])ask=([^&]*)/.exec(location.hash || '');
+  if (!m || !m[1]) return;
+
+  const raw = decodeURIComponent(m[1].replace(/\+/g, ' ')).trim();
+  const q = STATE.data.questions.find((x) => x.id.toLowerCase() === raw.toLowerCase());
+  if (q) $('#ask-preset').value = q.id;
+  else $('#ask-input').value = raw;
+
+  $('#live').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!$('#ask-run').disabled) runLive();
 }
 
 /* ---------------------------------------------------------------------------
@@ -73,20 +91,35 @@ function providers() {
   return [...seen.values()];
 }
 
+/* How many questions both arms of a provider actually cover. A --only slice
+   leaves a real-looking file behind with 3 records in it, so "has both arms"
+   alone is not enough to pick a default. */
+function pairCoverage(p) {
+  const arms = Object.values(p.arms);
+  if (arms.length < 2) return 0;
+  return Math.min(...arms.map((a) => a.summary?.total || 0));
+}
+
 function buildRunPicker() {
   const picker = $('#run-picker');
   const provs = providers();
   picker.innerHTML = '';
   for (const p of provs) {
-    const n = Object.keys(p.arms).length;
-    const o = el('option', null, `${p.provider} (${n === 2 ? 'both arms' : Object.keys(p.arms)[0] + ' only'})`);
+    const n = pairCoverage(p);
+    const label = n
+      ? `${p.provider} — ${n} questions, both arms`
+      : `${p.provider} — ${Object.keys(p.arms)[0]} only`;
+    const o = el('option', null, label);
     o.value = p.provider;
     picker.appendChild(o);
   }
-  // Prefer a provider that actually has both arms -- that is the only pairing
-  // the comparison means anything for.
-  const complete = provs.find((p) => Object.keys(p.arms).length === 2);
-  STATE.provider = (complete || provs[0] || {}).provider || null;
+
+  // Default to the MOST COMPLETE pairing, not merely the first complete one.
+  // An aborted 3-question API slice would otherwise outrank the full 31-question
+  // run and the dashboard would open showing "n/a" against most questions --
+  // which reads as a broken page rather than a partial run.
+  const best = provs.slice().sort((a, b) => pairCoverage(b) - pairCoverage(a))[0];
+  STATE.provider = (best || {}).provider || null;
   picker.value = STATE.provider || '';
   picker.disabled = provs.length < 2;
 }

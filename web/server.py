@@ -204,6 +204,40 @@ def _jsonable(x: Any) -> Any:
     return json.loads(json.dumps(x, default=str))
 
 
+def friendly_error(msg: str | None) -> str | None:
+    """Turn a provider exception into one sentence a room can read.
+
+    A raw Gemini 429 is ~1.5 KB of nested JSON quoting three different quota
+    URLs. On a projector that is indistinguishable from a crash, and it hides
+    the one fact that matters: whether to wait a minute or stop for the day.
+    """
+    if not msg:
+        return msg
+    model = os.getenv("GEMINI_MODEL", "the model")
+    low = msg.lower()
+
+    if "resource_exhausted" in low or "429" in msg:
+        if "perday" in msg.replace(" ", "").lower():
+            return (f"Daily free-tier quota for {model} is used up. It resets at "
+                    f"midnight Pacific — switch GEMINI_MODEL, or use HARNESS_LLM=local.")
+        return (f"Rate-limited by the free tier on {model} and the retries did not "
+                f"clear it. Wait a minute and run it again.")
+    if "503" in msg or "unavailable" in low:
+        return f"{model} is busy on Google's side (503). Usually clears in seconds."
+    if "thought_signature" in low:
+        return ("Gemini rejected the tool-call history (missing thought_signature). "
+                "This is a harness bug, not a quota problem.")
+    if "api key" in low or "permission_denied" in low or "401" in msg or "403" in msg:
+        # Never echo the provider's text here; it can contain key fragments.
+        return "The API key was rejected. Check GEMINI_API_KEY in .env."
+    if "not_found" in low or "404" in msg:
+        return (f"{model} is not available to this key for generation. "
+                f"Run `python -m harness.llm` to list what is.")
+
+    # Unrecognised: keep it, but cap it so one exception cannot fill the pane.
+    return msg if len(msg) <= 300 else msg[:300] + " …"
+
+
 def _run_stream(req: AskRequest) -> Iterator[str]:
     q: queue.Queue[dict | None] = queue.Queue()
 
@@ -226,7 +260,7 @@ def _run_stream(req: AskRequest) -> Iterator[str]:
                                                 toolbox=RUNNER.toolbox(), on_event=emit)
                 except Exception as e:
                     emit({"type": "arm_error", "arm": arm,
-                          "error": f"{type(e).__name__}: {e}"})
+                          "error": friendly_error(f"{type(e).__name__}: {e}")})
                     continue
 
                 rows = _jsonable(res.rows)
@@ -236,7 +270,7 @@ def _run_stream(req: AskRequest) -> Iterator[str]:
                 emit({"type": "arm_done", "arm": arm, "elapsed_s": round(time.time() - t0, 2),
                       "sql": res.final_sql, "rows": rows[:50],
                       "row_count": len(rows), "steps": res.steps,
-                      "tool_calls": res.tool_calls, "error": res.error,
+                      "tool_calls": res.tool_calls, "error": friendly_error(res.error),
                       "answer_text": res.answer_text, "usage": res.usage,
                       "correct": correct})
             emit({"type": "done", "graded": gold is not None})
