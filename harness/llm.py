@@ -26,6 +26,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -39,6 +40,12 @@ class ToolCall:
     id: str
     name: str
     arguments: dict[str, Any]
+    # Opaque provider state echoed back on the next request. Gemini 3 returns a
+    # `thought_signature` on every function-call part and REJECTS the following
+    # request with 400 INVALID_ARGUMENT if it is not resent verbatim, so this
+    # has to survive the round trip through the OpenAI-shaped history. No other
+    # backend sets it, and none of them ever sees it.
+    signature: bytes | None = None
 
 
 @dataclass
@@ -173,7 +180,8 @@ class GeminiLLM:
     # with GEMINI_MODEL; health() lists what the key can actually reach.
     DEFAULT_MODEL = "gemini-3.8-flash"
 
-    def __init__(self, api_key: str | None = None, model: str | None = None):
+    def __init__(self, api_key: str | None = None, model: str | None = None,
+                 max_retries: int | None = None):
         from google import genai  # imported lazily: local-only runs need no key
 
         key = api_key or os.getenv("GEMINI_API_KEY")
@@ -183,6 +191,7 @@ class GeminiLLM:
                 "HARNESS_LLM=local."
             )
         self.model = model or os.getenv("GEMINI_MODEL", self.DEFAULT_MODEL)
+        self.max_retries = max_retries or int(os.getenv("GEMINI_MAX_RETRIES", "4"))
         self._client = genai.Client(api_key=key)
 
     @staticmethod
@@ -239,8 +248,12 @@ class GeminiLLM:
                     fn = tc.get("function", {}) or {}
                     name = fn.get("name", "")
                     names_by_id[tc.get("id", "")] = name
-                    parts.append(types.Part(function_call=types.FunctionCall(
-                        name=name, args=_safe_json(fn.get("arguments")))))
+                    # The signature rides on the PART, not the FunctionCall,
+                    # and each parallel call carries its own.
+                    parts.append(types.Part(
+                        function_call=types.FunctionCall(
+                            name=name, args=_safe_json(fn.get("arguments"))),
+                        thought_signature=tc.get("signature")))
                 if parts:
                     contents.append(types.Content(role="model", parts=parts))
             elif role == "tool":
@@ -250,6 +263,37 @@ class GeminiLLM:
                     name=name, response={"result": str(m.get("content") or "")})))
         flush()
         return "\n\n".join(system_parts), contents
+
+    # Transient by nature: 429 is the free tier's rate limit, 503 is Google
+    # shedding load on a popular model. Both are worth waiting out; a 400 is
+    # our bug and must surface immediately.
+    _RETRY_STATUS = frozenset({429, 500, 502, 503, 504})
+
+    def _generate(self, **kwargs):
+        """generate_content with backoff.
+
+        An agent step that dies on a transient 503 loses every tool result the
+        run has accumulated, so one blip ends the question. Measured: a Q01 run
+        reached step 7 and threw away six successful tool calls.
+        """
+        from google.genai import errors
+
+        delay = 2.0
+        for attempt in range(self.max_retries):
+            try:
+                return self._client.models.generate_content(**kwargs)
+            except errors.APIError as e:
+                status = getattr(e, "code", None) or getattr(e, "status_code", None)
+                if status not in self._RETRY_STATUS or attempt == self.max_retries - 1:
+                    raise
+                # A per-DAY quota does not refill on a backoff timescale. The
+                # API still sends a short retryDelay, so backing off looks
+                # reasonable and then fails anyway, ~30s later, per question.
+                # Fail immediately and let the caller report the real problem.
+                if status == 429 and "PerDay" in str(e):
+                    raise
+                time.sleep(delay)
+                delay = min(delay * 2, 30.0)
 
     def chat(self, messages, tools=None, temperature: float = 0.0) -> LLMResponse:
         from google.genai import types
@@ -261,19 +305,23 @@ class GeminiLLM:
         converted = self._convert_tools(tools)
         if converted:
             cfg["tools"] = converted
+            # The agent loop dispatches tools itself. Left on, the SDK tries to
+            # call them for us, warns about it, and renames them `default_api:*`.
+            cfg["automatic_function_calling"] = types.AutomaticFunctionCallingConfig(
+                disable=True)
 
-        resp = self._client.models.generate_content(
-            model=self.model, contents=contents,
-            config=types.GenerateContentConfig(**cfg),
-        )
+        resp = self._generate(model=self.model, contents=contents,
+                              config=types.GenerateContentConfig(**cfg))
 
         text_parts: list[str] = []
         calls: list[ToolCall] = []
         for i, part in enumerate(_parts(resp)):
             fc = getattr(part, "function_call", None)
             if fc:
-                calls.append(ToolCall(id=fc.id or f"call_{i}", name=fc.name,
-                                      arguments=dict(fc.args or {})))
+                calls.append(ToolCall(
+                    id=fc.id or f"call_{i}", name=fc.name,
+                    arguments=dict(fc.args or {}),
+                    signature=getattr(part, "thought_signature", None)))
             elif getattr(part, "text", None):
                 text_parts.append(part.text)
 
@@ -513,24 +561,25 @@ def _main() -> int:
         return 1
 
     print(f"  model={getattr(client, 'model', '?')}")
+    ok = True
     if hasattr(client, "health"):
         ok, msg = client.health()
         print(f"  {'OK ' if ok else 'FAIL'} {msg}")
-        if not ok:
-            return 1
 
+    # List models even when health FAILED -- a wrong model id is exactly when
+    # you need to see the options, so short-circuiting here would hide them.
     if isinstance(client, GeminiLLM):
         try:
             names = sorted((m.name or "").replace("models/", "", 1)
                            for m in client._client.models.list())
-            flash = [n for n in names if "flash" in n]
-            print(f"  {len(names)} models reachable; {len(flash)} flash:")
-            for n in flash:
-                print(f"    {n}{'   <- configured' if n == client.model else ''}")
         except Exception as e:
             print(f"  could not list models: {e}")
             return 1
-    return 0
+        flash = [n for n in names if "flash" in n]
+        print(f"  {len(names)} models reachable; {len(flash)} with 'flash':")
+        for n in flash:
+            print(f"    {n}{'   <- configured' if n == client.model else ''}")
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

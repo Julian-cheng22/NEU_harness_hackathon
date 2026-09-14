@@ -326,11 +326,7 @@ def run_harness(llm: LLM, question: str, cfg: DbConfig | None = None,
         messages.append({
             "role": "assistant",
             "content": resp.text or None,
-            "tool_calls": [
-                {"id": tc.id, "type": "function",
-                 "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)}}
-                for tc in resp.tool_calls
-            ],
+            "tool_calls": [_tool_call_payload(tc) for tc in resp.tool_calls],
         })
         for tc in resp.tool_calls:
             res.tool_calls.append(tc.name)
@@ -363,6 +359,24 @@ def run_harness(llm: LLM, question: str, cfg: DbConfig | None = None,
     elif not res.error:
         res.error = "Agent never executed a successful query."
     return res
+
+
+def _tool_call_payload(tc) -> dict[str, Any]:
+    """One assistant tool call in the OpenAI shape the history uses.
+
+    `signature` is only present when the backend produced one (Gemini 3, which
+    rejects the next request without it). The key is omitted entirely
+    otherwise, because this dict is serialised straight into llama.cpp's
+    OpenAI-compatible payload and an unexpected field there is not worth the
+    risk.
+    """
+    payload: dict[str, Any] = {
+        "id": tc.id, "type": "function",
+        "function": {"name": tc.name, "arguments": json.dumps(tc.arguments)},
+    }
+    if getattr(tc, "signature", None):
+        payload["signature"] = tc.signature
+    return payload
 
 
 def extract_sql(text: str) -> str:
