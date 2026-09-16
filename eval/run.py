@@ -34,6 +34,7 @@ load_dotenv(ROOT / ".env")
 from eval.grade import explain_mismatch, matches  # noqa: E402
 from harness import agent, schema_card  # noqa: E402
 from harness.db import DbConfig, connect  # noqa: E402
+from harness.memory import knowledge_mode  # noqa: E402
 
 OUT_DIR = ROOT / "eval" / "out"
 
@@ -139,6 +140,10 @@ def main() -> int:
     ap.add_argument("--only", type=str, default=None,
                     help="Comma-separated question ids or defect ids, e.g. D5,Q01")
     ap.add_argument("--verbose", action="store_true")
+    ap.add_argument("--tag", type=str, default=None,
+                    help="Suffix for the output filename. Needed to run the "
+                         "harness arm twice under different HARNESS_KNOWLEDGE "
+                         "modes without one overwriting the other.")
     args = ap.parse_args()
 
     cfg, admin = DbConfig(), DbConfig.admin()
@@ -170,16 +175,22 @@ def main() -> int:
     summaries: dict[str, dict] = {}
 
     for arm in arms:
-        print(f"\n=== {arm.upper()} ({provider}) -- {len(questions)} questions ===")
+        km = f", knowledge={knowledge_mode()}" if arm == "harness" else ""
+        print(f"\n=== {arm.upper()} ({provider}{km}) -- {len(questions)} questions ===")
         t0 = time.time()
         records = run_arm(arm, questions, llm, cfg, admin, args.verbose)
         s = summarize(records)
         s["elapsed_s"] = round(time.time() - t0, 1)
         summaries[arm] = s
 
-        path = OUT_DIR / f"{arm}-{provider}.json"
+        path = OUT_DIR / f"{arm}-{provider}{'-' + args.tag if args.tag else ''}.json"
         path.write_text(json.dumps(
-            {"arm": arm, "provider": provider, "summary": s, "records": records},
+            {"arm": arm, "provider": provider,
+             # Recorded because the harness arm's result is meaningless without
+             # it: the same code scores differently depending on whether its
+             # business knowledge was hand-written or discovered.
+             "knowledge": knowledge_mode(),
+             "summary": s, "records": records},
             indent=2, default=str), encoding="utf-8")
         print(f"  -> {s['correct']}/{s['total']} = {s['accuracy']*100:.1f}%  "
               f"({s['elapsed_s']}s)   written to {path.relative_to(ROOT)}")

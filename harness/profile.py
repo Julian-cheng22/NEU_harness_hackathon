@@ -273,6 +273,15 @@ def _check_staleness(conn, p: ColumnProfile, cfg: DbConfig) -> None:
     Looks for a same-named-or-similar column on another table reachable by an
     obvious key, and measures disagreement.
     """
+    # CURATED. `known_pairs` names the exact stale column in this dataset, so a
+    # discovery run that could call it would simply be handed D3 rather than
+    # finding it. The generic checks above (type drift, duplicates, NULL
+    # semantics, value domains) are schema-independent instrumentation and stay
+    # on for everyone; only this dataset-specific lookup is gated.
+    from . import memory
+    if not memory.curated_hints_enabled():
+        return
+
     # The `extra` predicate must use the alias `b` (the parent side), not the
     # bare table name -- the query below aliases both tables, so an unaliased
     # reference is an "Unknown column" error at runtime.

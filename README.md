@@ -353,15 +353,188 @@ question for the model's attention**.
 
 ---
 
+## Earning the glossary instead of writing it
+
+Breaking the lift down by which module earned each point exposes an awkward
+fact: **about half of it comes from `glossary.py`, which is hand-written.** D7
+(+2) and D10 (+2) are glossary-only. The most technically interesting module,
+join inference, earned zero — the baseline already passed D1 and D8. So the
+harness's best-measured component is the one that needs a human to have already
+written the convention down, and it does not port to another company.
+
+This section is the attempt to replace it with knowledge the model *earns*.
+
+### How it works
+
+```powershell
+.venv\Scripts\python -m harness.discover        # audit, verify, write the artifact
+.venv\Scripts\python -m harness.review --queue  # what most needs a human
+```
+
+[`discover.py`](harness/discover.py) points the model at the database with no
+questions in sight and asks, one defect class at a time, "is this kind of
+problem here, and can you prove it?" The taxonomy is ten schema-independent
+classes — stale copies, type drift, overloaded NULLs, unit inconsistency and so
+on. It names no table and no column.
+
+A claim is only kept if it arrives with a proof, and the proof is checked
+mechanically by [`verify.py`](harness/verify.py): a single SELECT returning one
+row, one column named `evidence`, counting the affected rows. That contract
+exists because the model is being asked to produce both the claim and its
+evidence, which is an obvious incentive to write a query that cannot fail.
+Rejected: constants (`SELECT 1 AS evidence`), tautologies (a bare `COUNT(*)`),
+proofs about columns the claim never mentions, and proofs returning zero.
+
+Survivors land in `data/learned_schema.yaml`, bound to `DATASET_VERSION` and a
+DB fingerprint, and are retrieved by `resolve_term` exactly like a curated
+`Term`. `HARNESS_KNOWLEDGE` picks the source: `curated` (the default — the
+original harness, unchanged), `discovered`, or `both`.
+
+### Overfitting to the schema is the goal; overfitting to the questions is fraud
+
+Learning that `plan_tier` is stale is what a new analyst does in week one.
+Learning the answers to the eval is cheating, and it would be invisible in the
+final number. So question-blindness is **structural**: `discover.py` has no
+import, path or parameter through which a question can reach it, and
+[`tests/test_discovery.py`](tests/test_discovery.py) asserts both that the
+module never references `questions.yaml` and that the taxonomy names none of
+this dataset's real columns.
+
+### Three knowledge channels, not one
+
+The comparison nearly measured nothing. The glossary is not the only place
+curated knowledge lives:
+
+| Channel | What it leaks |
+|---|---|
+| `glossary.py` | the 12 hand-written terms |
+| `execute.py` `_DIRTY_COLUMNS` | every defect, by column, attached to **every query result** |
+| `execute.py` zero-rows note | the three `status` vocabularies — D2's answer |
+| `profile.py` `known_pairs` | the exact stale column — D3's answer |
+
+The crib sheet in `execute.py` is a *bigger* channel than the glossary. All four
+are now gated together by `memory.curated_hints_enabled()`, and the `discovered`
+arm builds equivalent notes from its own claims — same trigger, same placement,
+capped to the same length — so the arms differ in knowledge rather than in
+plumbing. The generic probes (type drift, duplicates, value domains) stay on for
+everyone; they are instrumentation, not answers.
+
+### Measured
+
+Qwen3.5-9B Q4_K_M, local, 31 questions, same database, same day. *clean*
+excludes passes where the agent never actually finished — see below.
+
+| Arm | Knowledge | Score | clean | Tokens |
+|---|---|---|---|---|
+| baseline | none | 20/31 — 64.5% | 20/31 | 51k |
+| harness | curated (hand-written) | **27/31 — 87.1%** | 27/31 | 547k |
+| harness | discovered, run 1 | 23/31 — 74.2% | 21/31 | 737k + 434k audit |
+| harness | discovered, run 2 | 22/31 — 71.0% | 22/31 | 649k + 432k audit |
+
+**The discovered artifact recovers roughly a quarter to a third of what the
+hand-written glossary is worth** (+2 clean against baseline's 20, versus the
+glossary's +7), for a one-time audit cost of ~430k tokens and ~5.5 minutes.
+
+Per defect, the pattern is the one the analysis predicted: the model recovers
+what is visible in the data and recovers nothing that is not.
+
+| | baseline | curated | disc. 1 | disc. 2 |
+|---|---|---|---|---|
+| D5 type drift | 0/3 | 3/3 | 3/3 | 2/3 |
+| D3 stale cache | 1/3 | 2/3 | 1/3 | 2/3 |
+| D7 timezone | 1/3 | **3/3** | 1/3 | 1/3 |
+| D10 units / tax | 1/4 | **3/4** | 1/4 | 1/4 |
+
+D7 and D10 are exactly the two conventions no query can recover, and the
+discovered arm never touches them. That is not a bug — it is the boundary, and
+it is where the human interface below earns its place.
+
+### What the audit actually found
+
+Run 1 verified 4 claims (D2, D3, D5, D10-units); run 2 verified 6 (D1, D2, D3,
+D6, D9). Neither found D4, D7 or D8. Nothing was rejected in either run: the
+model did not try to game the contract.
+
+### Three honest failures
+
+**1. A wrong number propagated into an answer.** The stale-cache claim proved
+itself with a query that omits `ended_on IS NULL`, so it reported 26 disagreeing
+customers where the truth is 25 (the extra one is a mismatch on an *ended*
+subscription). Q07 asks precisely that question, and the model answered 26.
+A verified claim is **checked, not true** — and round 1's worst regression came
+from a tool stating a wrong number confidently. Persisting one to a file is that
+failure made permanent.
+
+**2. A tautology in disguise passed.** The vocabulary-collision proof counts
+invoices whose status is not a *subscriptions* value, plus subscriptions whose
+status is not an *invoices* value: 1902 + 128 = 2030, i.e. two entire tables.
+The finding is correct; the proof shows nothing. The whole-table flag caught it
+and routed it to the top of the review queue, which is what that flag is for.
+
+**3. The artifact is not stable.** Making `guidance` a required field — a
+one-field schema change — produced an almost entirely different artifact. Only
+D2 and D3 appear in both runs, and run 2 lost D5, which had been run 1's entire
+source of lift. Any claim about "what the model discovers" needs several runs
+behind it, not one.
+
+Making the field required also got it *populated*, not *good*: three of six
+claims filled `guidance` with a copy of their own verification query instead of
+a usage pattern.
+
+### The false-pass path, now observed live
+
+The runtime review flagged that grading the last *successful* `execute_sql` lets
+a run that errors or exhausts its steps still score, but could only demonstrate
+it with a scripted model. Run 1 hit it for real: Q02 and Q15 both ran a correct
+query, kept exploring to the 12-step limit, never reported an answer, and were
+graded as passes. That is the 23/31 vs 21/31 gap in the table. The fix is an
+explicit final-answer selection rather than a retroactive one; it is not done.
+
+### Human review is an interface, deliberately
+
+[`review.py`](harness/review.py) is a working API and CLI — `--queue`,
+`--approve`, `--reject`, `--render` — and nothing more. The data here is
+synthetic and its ten defects are known in advance, so a reviewer would only be
+confirming what the generator already wrote down; building a review product
+against a problem that does not exist would be the wrong thing to build.
+
+What matters is that the seam sits where it will be needed, because on real
+company data this is where the system stops being automatic. Two axes, kept
+independent:
+
+* a human can **veto** a machine-verified claim — the query ran and the
+  conclusion was still wrong (failure 1 above is a live example);
+* a human can **approve** a claim no query can prove. This is the slot for D7
+  and D10: the machine can detect a shifted hour-of-day distribution, but only a
+  person can say "that subgroup is US/Eastern".
+
+Collapsing those into one score would discard exactly the cases that make a
+human worth asking.
+
+### Where this leaves the direction
+
+Worth continuing, with the claim stated narrowly: **a generic defect taxonomy
+plus mechanical verification recovers a minority — not a majority — of
+hand-written schema knowledge, and recovers none of the knowledge that is not in
+the data.** The honest next steps are stability across repeated audits, stronger
+proof requirements (a contrast, not just a count), a stronger model for the
+audit phase than for the answering phase, and fixing the false-pass path before
+any of these numbers are quoted again.
+
+---
+
 ## Status
 
-**Verified — 150 tests passing, plus a 31/31 eval dry run:**
+**Verified — 175 tests passing, plus a 31/31 eval dry run:**
 - 10-table schema, deterministic generator, all 10 defects asserted present in a live DB
 - Read-only enforcement verified at the MySQL grant layer (`DROP` denied)
 - Join inference, profiling, schema card, glossary retrieval
 - 31 gold questions, every one executed; every `naive_sql` confirmed to produce a *different* answer
 - Full agent loop — tool dispatch, message threading, error repair, step limits, grading —
   verified against a **scripted model**, so it runs with no API key, GPU or network
+- Discovery: the verification contract's anti-gaming rejections, question-blindness,
+  artifact round-trip, and that each of the four curated-knowledge channels is
+  actually dark under `HARNESS_KNOWLEDGE=discovered`
 
 **Not yet verified:** any arm driven by a real model. The agent loop is proven;
 what a 9B actually does with it is the open question.

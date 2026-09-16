@@ -40,6 +40,52 @@ _DIRTY_COLUMNS: dict[str, str] = {
 _MAX_EXPLAIN_ROWS = 200_000
 
 
+def _defect_notes(lowered: str) -> list[str]:
+    """Per-column warnings attached to a result, from whichever knowledge
+    source this run is using.
+
+    The CHANNEL is identical for both arms -- same trigger (the query mentions
+    the column), same placement (a NOTE on the result). Only the CONTENT
+    differs: hand-written strings under `curated`, verified claims under
+    `discovered`. Holding the channel fixed is what makes the comparison about
+    knowledge rather than about plumbing.
+    """
+    from . import memory
+
+    notes: list[str] = []
+    if memory.curated_hints_enabled():
+        for col, why in _DIRTY_COLUMNS.items():
+            if col in lowered:
+                notes.append(f"Query touches `{col}`: {why}.")
+        if "join" in lowered and "left join" not in lowered and "cust_id" in lowered:
+            notes.append(
+                "You used an INNER JOIN on `cust_id`. About 5% of support_tickets "
+                "reference customers that no longer exist, and those rows are being "
+                "silently dropped (D8). Use LEFT JOIN unless you intend to exclude them."
+            )
+
+    if memory.learned_claims_enabled():
+        from . import glossary
+        seen: set[str] = set()
+        for term in glossary.learned_terms():
+            for col in term.columns:
+                bare = col.split(".")[-1].lower()
+                if bare in lowered and bare not in seen:
+                    seen.add(bare)
+                    # Capped to roughly the length of the curated strings above.
+                    # Parity of CHANNEL includes parity of how much of the
+                    # model's attention the channel consumes -- round 1 measured
+                    # a 9B losing the question behind bulky tool output, so an
+                    # arm whose notes are three times longer is not a fair
+                    # comparison even when the content is equally true.
+                    text = term.definition
+                    if len(text) > 240:
+                        text = text[:237].rstrip() + "..."
+                    notes.append(f"Query touches `{bare}`: {text}")
+                    break
+    return notes
+
+
 def explain(sql: str, cfg: DbConfig | None = None) -> dict[str, Any]:
     """Cheap pre-flight. Returns {ok, plan, estimated_rows, error}."""
     cfg = cfg or DbConfig()
@@ -72,14 +118,20 @@ def sanity_check(result: dict[str, Any], sql: str) -> list[str]:
     lowered = sql.lower()
 
     if not rows:
-        notes.append(
-            "ZERO ROWS. Before reporting this as the answer, check: (a) does the "
-            "value you filtered on actually exist in that column? `status` uses a "
-            "different vocabulary on invoices (paid/unpaid/void), deals "
-            "(open/won/lost) and subscriptions (active/paused/cancelled). "
-            "(b) did an INNER JOIN drop everything? Profile the column or try a "
-            "LEFT JOIN before concluding the answer is zero."
-        )
+        # The generic half of this warning is method, not knowledge -- it tells
+        # the model how to interrogate an empty result, which is true of any
+        # database. The vocabularies appended below it are this dataset's
+        # answer to D2, so they are gated with the rest of the curated hints.
+        zero = ("ZERO ROWS. Before reporting this as the answer, check: (a) does "
+                "the value you filtered on actually exist in that column? "
+                "(b) did an INNER JOIN drop everything? Profile the column or "
+                "try a LEFT JOIN before concluding the answer is zero.")
+        from . import memory
+        if memory.curated_hints_enabled():
+            zero += (" Note that `status` uses a different vocabulary on invoices "
+                     "(paid/unpaid/void), deals (open/won/lost) and subscriptions "
+                     "(active/paused/cancelled).")
+        notes.append(zero)
 
     # A single NULL aggregate usually means a CAST or filter silently ate
     # everything, not that the true answer is unknown.
@@ -92,16 +144,12 @@ def sanity_check(result: dict[str, Any], sql: str) -> list[str]:
                 "problem, not a real answer."
             )
 
-    for col, why in _DIRTY_COLUMNS.items():
-        if col in lowered:
-            notes.append(f"Query touches `{col}`: {why}.")
-
-    if "join" in lowered and "left join" not in lowered and "cust_id" in lowered:
-        notes.append(
-            "You used an INNER JOIN on `cust_id`. About 5% of support_tickets "
-            "reference customers that no longer exist, and those rows are being "
-            "silently dropped (D8). Use LEFT JOIN unless you intend to exclude them."
-        )
+    # _DIRTY_COLUMNS is CURATED knowledge -- it names every defect, by column,
+    # on every query the agent runs. It is a bigger knowledge channel than the
+    # glossary, and leaving it on would mean the `discovered` arm silently
+    # inherits the hand-written answers it is supposed to be finding for
+    # itself. Both hint blocks below are gated together; see memory.py.
+    notes.extend(_defect_notes(lowered))
 
     if result.get("truncated"):
         notes.append(

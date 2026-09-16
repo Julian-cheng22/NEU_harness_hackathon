@@ -17,6 +17,11 @@ eval/out/*
 !eval/out/.gitkeep
 !eval/out/baseline-local.json
 !eval/out/harness-local.json
+# Evidence behind the curated-vs-discovered comparison.
+!eval/out/baseline-local-r2.json
+!eval/out/harness-local-curated.json
+!eval/out/harness-local-discovered.json
+!eval/out/harness-local-discovered-v2.json
 
 .DS_Store
 Thumbs.db

@@ -243,6 +243,52 @@ MAX(CASE WHEN event_value REGEXP '^[0-9]+(\\\\.[0-9]+)?$'
 _BY_NAME = {t.name.lower(): t for t in GLOSSARY}
 
 
+# ---------------------------------------------------------------------------
+# Learned knowledge -- the same slot, filled by discovery instead of by hand
+# ---------------------------------------------------------------------------
+# A discovered claim and a curated Term carry the same payload (what the thing
+# means, which columns, how to compute it), so the answering agent does not
+# need to know which one it got. That is the point: `discovered` is a drop-in
+# replacement for this file, which is what makes the A/B meaningful.
+_LEARNED_CACHE: dict[str, object] = {}
+
+
+def _claim_to_term(c) -> Term:
+    definition = c.finding
+    if c.evidence is not None:
+        # Carry the proof through to the model. "25 accounts disagree" is
+        # actionable in a way that "this column is unreliable" is not, and it
+        # is the number a reader can re-check.
+        definition += f" (verified against this database: {c.evidence:,.0f} affected)"
+    aliases = sorted({col.split(".")[-1].lower() for col in c.columns})
+    return Term(name=c.name, definition=definition, columns=c.columns,
+                sql_hint=c.guidance, aliases=aliases, defect_ids=[c.taxonomy])
+
+
+def learned_terms() -> list[Term]:
+    """Active claims from the artifact, as Terms. Empty unless the mode asks."""
+    from . import memory
+    if not memory.learned_claims_enabled():
+        return []
+    p = memory.artifact_path()
+    key = f"{p}:{p.stat().st_mtime if p.exists() else 0}"
+    if _LEARNED_CACHE.get("key") != key:
+        _LEARNED_CACHE["key"] = key
+        _LEARNED_CACHE["terms"] = [_claim_to_term(c) for c in memory.load(p).active()]
+    return list(_LEARNED_CACHE["terms"])  # type: ignore[arg-type]
+
+
+def active_glossary() -> list[Term]:
+    """The terms this run is allowed to see, per HARNESS_KNOWLEDGE."""
+    from . import memory
+    mode = memory.knowledge_mode()
+    if mode == "curated":
+        return GLOSSARY
+    if mode == "discovered":
+        return learned_terms()
+    return [*GLOSSARY, *learned_terms()]
+
+
 # Question-shaped filler. Without this, a single shared word like "the" scores
 # a match and the model gets handed confidently irrelevant advice -- which is
 # strictly worse than returning nothing, because the no-match path explicitly
@@ -294,12 +340,14 @@ def resolve_term(query: str, limit: int = 3) -> list[Term]:
     not to guess, which is the correct behaviour for an unknown term.
     """
     q = query.lower().strip()
-    if q in _BY_NAME:
-        return [_BY_NAME[q]]
+    terms = active_glossary()
+    by_name = {t.name.lower(): t for t in terms}
+    if q in by_name:
+        return [by_name[q]]
 
     qt = _tokens(q)
     scored: list[tuple[float, Term]] = []
-    for term in GLOSSARY:
+    for term in terms:
         score = 0.0
         if term.name.lower() in q:
             score += 10.0

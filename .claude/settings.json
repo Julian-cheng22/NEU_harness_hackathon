@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python -c ' *)",
+      "Bash(.venv/Scripts/python -)",
+      "Bash(awk '/HARNESS DISCOVERED/,0' \"C:/Users/usp78/AppData/Local/Temp/claude/c--Users-usp78-Desktop-NEU-harness-hackathon/cc400f2f-969f-4667-b23c-f4348216f935/tasks/bgkj0ufk2.output\")",
+      "Bash(.venv/Scripts/python \"C:/Users/usp78/AppData/Local/Temp/claude/c--Users-usp78-Desktop-NEU-harness-hackathon/cc400f2f-969f-4667-b23c-f4348216f935/scratchpad/audit_run.py\")",
+      "Bash(HARNESS_LLM=local HARNESS_KNOWLEDGE=discovered .venv/Scripts/python eval/run.py --arm harness --tag discovered-v2)"
+    ]
+  }
+}

@@ -17,8 +17,20 @@ Each module here closes one of those gaps:
     execute      validate -> run -> repair loop
     agent        the orchestrator that ties the tools together
 
+And the second path to that same knowledge -- earning it instead of writing it:
+
+    discover     question-blind audit: the model proposes claims about the data
+    verify       mechanical proof or rejection of a proposed claim
+    memory       the artifact of verified claims, and the knowledge-mode gate
+    review       the seam where a human approves, vetoes or annotates a claim
+
+`glossary` is hand-written and `discover` produces the same shape by audit, so
+HARNESS_KNOWLEDGE (curated | discovered | both) swaps one for the other without
+the answering agent noticing. Default is `curated`: the original harness.
+
 Defect ids referenced in docstrings (D1..D10) are defined in data/defects.yaml.
 """
 
-__all__ = ["db", "schema_card", "joins", "profile"]
+__all__ = ["db", "schema_card", "joins", "profile", "discover", "memory",
+           "review", "verify"]
 __version__ = "0.1.0"
