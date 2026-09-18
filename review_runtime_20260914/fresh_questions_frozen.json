@@ -1,0 +1,63 @@
+[
+  {
+    "id": "R01",
+    "defect_ids": [
+      "D5"
+    ],
+    "question": "What is the average numeric event_value for 'export.csv', excluding missing or non-numeric values? Return just the average.",
+    "gold_sql": "SELECT AVG(CAST(event_value AS DECIMAL(18,4))) AS avg_value FROM usage_events WHERE feature_key='export.csv' AND event_value REGEXP '^[0-9]+(\\\\.[0-9]+)?$'"
+  },
+  {
+    "id": "R02",
+    "defect_ids": [
+      "D10",
+      "D4"
+    ],
+    "question": "What is the total paid invoice amount in US dollars? Include invoices marked paid even if their payment timestamp is missing. Return just the total.",
+    "gold_sql": "SELECT SUM(CASE WHEN currency_minor=1 THEN amount/100 WHEN currency_minor=0 THEN amount WHEN issued_at<'2025-07-01' THEN amount/100 ELSE amount END) FROM invoices WHERE status='paid'"
+  },
+  {
+    "id": "R03",
+    "defect_ids": [
+      "D7"
+    ],
+    "question": "How many usage events occurred on 2026-07-01 in UTC? Return just the count.",
+    "gold_sql": "SELECT COUNT(*) FROM usage_events WHERE (CASE WHEN source='batch' THEN event_ts+INTERVAL 4 HOUR ELSE event_ts END)>='2026-07-01' AND (CASE WHEN source='batch' THEN event_ts+INTERVAL 4 HOUR ELSE event_ts END)<'2026-07-02'"
+  },
+  {
+    "id": "R04",
+    "defect_ids": [
+      "D3"
+    ],
+    "question": "What is the current list price of the API Add-on (SKU-ADD-API)? Return just the price.",
+    "gold_sql": "SELECT list_price_usd FROM product_catalog WHERE sku='SKU-ADD-API' AND effective_to IS NULL"
+  },
+  {
+    "id": "R05",
+    "defect_ids": [
+      "D10"
+    ],
+    "question": "What is the total value of lost deals, net of tax, in US dollars? Return just the total.",
+    "gold_sql": "SELECT SUM(amount/1.08) FROM deals WHERE status='lost'"
+  },
+  {
+    "id": "R06",
+    "defect_ids": [
+      "D8"
+    ],
+    "question": "How many priority P1 support tickets refer to a non-null customer key that has no matching customer record? Return just the count.",
+    "gold_sql": "SELECT COUNT(*) FROM support_tickets t LEFT JOIN customers c ON c.customer_id=t.cust_id WHERE t.priority='P1' AND t.cust_id IS NOT NULL AND c.customer_id IS NULL"
+  },
+  {
+    "id": "R07",
+    "defect_ids": [],
+    "question": "How many employees are on the Engineering team? Return just the count.",
+    "gold_sql": "SELECT COUNT(*) FROM employees WHERE team='Engineering'"
+  },
+  {
+    "id": "R08",
+    "defect_ids": [],
+    "question": "How many support tickets are marked priority P2? Return just the count.",
+    "gold_sql": "SELECT COUNT(*) FROM support_tickets WHERE priority='P2'"
+  }
+]

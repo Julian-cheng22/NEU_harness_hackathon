@@ -1,0 +1,227 @@
+{
+  "arm": "baseline",
+  "provider": "local",
+  "model": "qwen3.5-9b",
+  "enable_thinking": false,
+  "started_unix": 1789423606.045733,
+  "elapsed_s": 10.671347379684448,
+  "question_set": "fresh",
+  "summary": {
+    "total": 8,
+    "correct": 3,
+    "accuracy": 0.375,
+    "by_defect": {
+      "D5": {
+        "n": 1,
+        "correct": 0
+      },
+      "D10": {
+        "n": 2,
+        "correct": 0
+      },
+      "D4": {
+        "n": 1,
+        "correct": 0
+      },
+      "D7": {
+        "n": 1,
+        "correct": 0
+      },
+      "D3": {
+        "n": 1,
+        "correct": 0
+      },
+      "D8": {
+        "n": 1,
+        "correct": 1
+      },
+      "control": {
+        "n": 2,
+        "correct": 2
+      }
+    }
+  },
+  "records": [
+    {
+      "id": "R01",
+      "arm": "baseline",
+      "question": "What is the average numeric event_value for 'export.csv', excluding missing or non-numeric values? Return just the average.",
+      "defect_ids": [
+        "D5"
+      ],
+      "correct": false,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT AVG(CAST(event_value AS UNSIGNED)) AS avg_event_value\nFROM usage_events\nWHERE feature_key = 'export.csv'\n  AND event_value IS NOT NULL\n  AND event_value REGEXP '^[0-9]+(\\\\.[0-9]+)?$'",
+      "error": null,
+      "mismatch": "gold=(198.0772,) cand=(197.9136,)",
+      "elapsed_s": 2.03,
+      "usage": {
+        "completion_tokens": 62,
+        "prompt_tokens": 1634,
+        "total_tokens": 1696,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    },
+    {
+      "id": "R02",
+      "arm": "baseline",
+      "question": "What is the total paid invoice amount in US dollars? Include invoices marked paid even if their payment timestamp is missing. Return just the total.",
+      "defect_ids": [
+        "D10",
+        "D4"
+      ],
+      "correct": false,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT COALESCE(SUM(CASE WHEN currency_minor = 1 THEN amount / 100.0 ELSE amount END), 0) AS total_paid_usd\nFROM invoices\nWHERE status = 'paid'",
+      "error": null,
+      "mismatch": "gold=(1690075.0,) cand=(8913808.0,)",
+      "elapsed_s": 1.53,
+      "usage": {
+        "completion_tokens": 51,
+        "prompt_tokens": 1637,
+        "total_tokens": 1688,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    },
+    {
+      "id": "R03",
+      "arm": "baseline",
+      "question": "How many usage events occurred on 2026-07-01 in UTC? Return just the count.",
+      "defect_ids": [
+        "D7"
+      ],
+      "correct": false,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT COUNT(*) \nFROM usage_events \nWHERE DATE(event_ts) = '2026-07-01'",
+      "error": null,
+      "mismatch": "gold=(84.0,) cand=(85.0,)",
+      "elapsed_s": 1.02,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 1634,
+        "total_tokens": 1666,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    },
+    {
+      "id": "R04",
+      "arm": "baseline",
+      "question": "What is the current list price of the API Add-on (SKU-ADD-API)? Return just the price.",
+      "defect_ids": [
+        "D3"
+      ],
+      "correct": false,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT list_price_usd\nFROM product_catalog\nWHERE sku = 'SKU-ADD-API' AND is_current = 1",
+      "error": null,
+      "mismatch": "gold=(119.79,) cand=(99.0,)",
+      "elapsed_s": 1.0,
+      "usage": {
+        "completion_tokens": 32,
+        "prompt_tokens": 1631,
+        "total_tokens": 1663,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    },
+    {
+      "id": "R05",
+      "arm": "baseline",
+      "question": "What is the total value of lost deals, net of tax, in US dollars? Return just the total.",
+      "defect_ids": [
+        "D10"
+      ],
+      "correct": false,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT SUM(CASE WHEN d.currency_minor = 1 THEN d.amount / 100.0 ELSE d.amount END) AS total_lost_deals_usd\nFROM deals d\nWHERE d.status = 'lost'",
+      "error": "MySQL error 1054: Unknown column 'd.currency_minor' in 'field list'",
+      "mismatch": "candidate returned 0 rows; gold has 1",
+      "elapsed_s": 1.64,
+      "usage": {
+        "completion_tokens": 51,
+        "prompt_tokens": 1631,
+        "total_tokens": 1682,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    },
+    {
+      "id": "R06",
+      "arm": "baseline",
+      "question": "How many priority P1 support tickets refer to a non-null customer key that has no matching customer record? Return just the count.",
+      "defect_ids": [
+        "D8"
+      ],
+      "correct": true,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT COUNT(*) AS count\nFROM support_tickets st\nWHERE st.priority = 'P1'\n  AND st.cust_id IS NOT NULL\n  AND NOT EXISTS (\n    SELECT 1\n    FROM customers c\n    WHERE c.customer_id = st.cust_id\n  )",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 2.03,
+      "usage": {
+        "completion_tokens": 65,
+        "prompt_tokens": 1635,
+        "total_tokens": 1700,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    },
+    {
+      "id": "R07",
+      "arm": "baseline",
+      "question": "How many employees are on the Engineering team? Return just the count.",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT COUNT(*) \nFROM employees \nWHERE team = 'Engineering'",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 0.67,
+      "usage": {
+        "completion_tokens": 19,
+        "prompt_tokens": 1623,
+        "total_tokens": 1642,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    },
+    {
+      "id": "R08",
+      "arm": "baseline",
+      "question": "How many support tickets are marked priority P2? Return just the count.",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 1,
+      "tool_calls": [],
+      "final_sql": "SELECT COUNT(*) \nFROM support_tickets \nWHERE priority = 'P2'",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 0.73,
+      "usage": {
+        "completion_tokens": 21,
+        "prompt_tokens": 1624,
+        "total_tokens": 1645,
+        "prompt_tokens_details": {
+          "cached_tokens": 1597
+        }
+      }
+    }
+  ]
+}

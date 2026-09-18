@@ -1,0 +1,15 @@
+{
+  "generator_close": {
+    "second_event": "data: {\"type\": \"arm_start\", \"arm\": \"baseline\"}\n\n",
+    "max_concurrent_model_calls": 2,
+    "first_worker_still_active": true
+  },
+  "http_disconnect": {
+    "second_response": "data: {\"type\": \"fatal\", \"error\": \"Another question is already running. One at a time -- the model and the toolbox are shared.\"}\n\n",
+    "max_concurrent_model_calls": 1,
+    "first_worker_continued_after_disconnect": true,
+    "active_model_calls_after_finish": 0,
+    "request_after_worker_finished": "data: {\"type\": \"fatal\", \"error\": \"Another question is already running. One at a time -- the model and the toolbox are shared.\"}\n\n",
+    "request_after_garbage_collection": "data: {\"type\": \"arm_start\", \"arm\": \"baseline\"}\n\ndata: {\"type\": \"prompting\", \"arm\": \"baseline\", \"detail\": \"raw DDL (4,843 chars), one shot, no tools\"}\n\ndata: {\"type\": \"sql\", \"arm\": \"baseline\", \"sql\": \"SELECT COUNT(*) AS n FROM employees\"}\n\ndata: {\"type\": \"arm_done\", \"arm\": \"baseline\", \"elapsed_s\": 0.04, \"sql\": \"SELECT COUNT(*) AS n FROM employees\", \"rows\": [{\"n\": 40}], \"row_count\": 1, \"steps\": 1, \"tool_calls\": [], \"error\": null, \"answer_text\": \"```sql\\nSELECT COUNT(*) AS n FROM employees\\n```\", \"usage\": {}, \"correct\": null}\n\ndata: {\"type\": \"done\", \"graded\": false}\n\n"
+  }
+}

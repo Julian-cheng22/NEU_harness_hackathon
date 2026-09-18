@@ -1,0 +1,20 @@
+# Keep LF in the working tree on every platform.
+#
+# This is load-bearing, not cosmetic. data/generate.py writes seed.sql with an
+# explicit newline="\n", and `python data/generate.py --check` compares the
+# committed file against freshly generated output BYTE FOR BYTE. With git's
+# default autocrlf on Windows, a fresh clone would check seed.sql out with CRLF
+# and the determinism check would fail for every Windows teammate -- on a file
+# nobody had touched.
+#
+# The whole baseline-vs-harness comparison rests on that file being identical
+# everywhere, so pin the line endings rather than trusting per-machine config.
+* text=auto eol=lf
+
+# Generated dump: never convert, never diff it in review.
+data/seed.sql -text linguist-generated=true
+
+# PowerShell is happiest with CRLF.
+*.ps1 text eol=crlf
+
+*.gguf binary

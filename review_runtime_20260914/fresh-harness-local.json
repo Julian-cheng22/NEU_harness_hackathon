@@ -1,0 +1,229 @@
+{
+  "arm": "harness",
+  "provider": "local",
+  "model": "qwen3.5-9b",
+  "enable_thinking": false,
+  "started_unix": 1789423616.7190402,
+  "elapsed_s": 44.62495517730713,
+  "question_set": "fresh",
+  "summary": {
+    "total": 8,
+    "correct": 6,
+    "accuracy": 0.75,
+    "by_defect": {
+      "D5": {
+        "n": 1,
+        "correct": 1
+      },
+      "D10": {
+        "n": 2,
+        "correct": 0
+      },
+      "D4": {
+        "n": 1,
+        "correct": 0
+      },
+      "D7": {
+        "n": 1,
+        "correct": 1
+      },
+      "D3": {
+        "n": 1,
+        "correct": 1
+      },
+      "D8": {
+        "n": 1,
+        "correct": 1
+      },
+      "control": {
+        "n": 2,
+        "correct": 2
+      }
+    }
+  },
+  "records": [
+    {
+      "id": "R01",
+      "arm": "harness",
+      "question": "What is the average numeric event_value for 'export.csv', excluding missing or non-numeric values? Return just the average.",
+      "defect_ids": [
+        "D5"
+      ],
+      "correct": true,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT AVG(CAST(event_value AS DECIMAL(18, 4))) AS avg_value FROM usage_events WHERE feature_key = 'export.csv' AND REGEXP_LIKE(event_value, '^[0-9]+(\\\\.[0-9]+)?$') LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 10.07,
+      "usage": {
+        "completion_tokens": 298,
+        "prompt_tokens": 21185,
+        "total_tokens": 21483
+      }
+    },
+    {
+      "id": "R02",
+      "arm": "harness",
+      "question": "What is the total paid invoice amount in US dollars? Include invoices marked paid even if their payment timestamp is missing. Return just the total.",
+      "defect_ids": [
+        "D10",
+        "D4"
+      ],
+      "correct": false,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT SUM(CASE WHEN currency_minor = 1 THEN amount / 100.0 WHEN currency_minor = 0 THEN amount ELSE amount END) AS total_paid_usd FROM invoices WHERE status = 'paid' LIMIT 200",
+      "error": null,
+      "mismatch": "gold=(1690075.0,) cand=(8913808.0,)",
+      "elapsed_s": 6.51,
+      "usage": {
+        "completion_tokens": 201,
+        "prompt_tokens": 20658,
+        "total_tokens": 20859
+      }
+    },
+    {
+      "id": "R03",
+      "arm": "harness",
+      "question": "How many usage events occurred on 2026-07-01 in UTC? Return just the count.",
+      "defect_ids": [
+        "D7"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM usage_events WHERE DATE(CASE WHEN source = 'batch' THEN event_ts + INTERVAL '4' HOUR ELSE event_ts END) = '2026-07-01' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 4.05,
+      "usage": {
+        "completion_tokens": 124,
+        "prompt_tokens": 14923,
+        "total_tokens": 15047
+      }
+    },
+    {
+      "id": "R04",
+      "arm": "harness",
+      "question": "What is the current list price of the API Add-on (SKU-ADD-API)? Return just the price.",
+      "defect_ids": [
+        "D3"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT list_price_usd FROM product_catalog WHERE sku = 'SKU-ADD-API' AND effective_to IS NULL LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 3.43,
+      "usage": {
+        "completion_tokens": 104,
+        "prompt_tokens": 14339,
+        "total_tokens": 14443
+      }
+    },
+    {
+      "id": "R05",
+      "arm": "harness",
+      "question": "What is the total value of lost deals, net of tax, in US dollars? Return just the total.",
+      "defect_ids": [
+        "D10"
+      ],
+      "correct": false,
+      "steps": 4,
+      "tool_calls": [
+        "resolve_term",
+        "execute_sql",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) AS lost_deal_count, SUM(amount) AS total_gross, SUM(amount / 1.08) AS total_net FROM deals WHERE status = 'lost' LIMIT 200",
+      "error": null,
+      "mismatch": "gold=(6314213.0,) cand=(6314213.0, 64.0, 6819350.0)",
+      "elapsed_s": 11.61,
+      "usage": {
+        "completion_tokens": 385,
+        "prompt_tokens": 20313,
+        "total_tokens": 20698
+      }
+    },
+    {
+      "id": "R06",
+      "arm": "harness",
+      "question": "How many priority P1 support tickets refer to a non-null customer key that has no matching customer record? Return just the count.",
+      "defect_ids": [
+        "D8"
+      ],
+      "correct": true,
+      "steps": 3,
+      "tool_calls": [
+        "profile_column",
+        "profile_column",
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM support_tickets AS st WHERE st.priority = 'P1' AND NOT st.cust_id IS NULL AND NOT st.cust_id IN (SELECT customer_id FROM customers) LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 5.6,
+      "usage": {
+        "completion_tokens": 185,
+        "prompt_tokens": 14654,
+        "total_tokens": 14839
+      }
+    },
+    {
+      "id": "R07",
+      "arm": "harness",
+      "question": "How many employees are on the Engineering team? Return just the count.",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 2,
+      "tool_calls": [
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM employees WHERE team = 'Engineering' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 1.58,
+      "usage": {
+        "completion_tokens": 48,
+        "prompt_tokens": 9340,
+        "total_tokens": 9388
+      }
+    },
+    {
+      "id": "R08",
+      "arm": "harness",
+      "question": "How many support tickets are marked priority P2? Return just the count.",
+      "defect_ids": [],
+      "correct": true,
+      "steps": 2,
+      "tool_calls": [
+        "execute_sql"
+      ],
+      "final_sql": "SELECT COUNT(*) FROM support_tickets WHERE priority = 'P2' LIMIT 200",
+      "error": null,
+      "mismatch": null,
+      "elapsed_s": 1.77,
+      "usage": {
+        "completion_tokens": 53,
+        "prompt_tokens": 9346,
+        "total_tokens": 9399
+      }
+    }
+  ]
+}

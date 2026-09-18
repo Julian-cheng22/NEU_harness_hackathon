@@ -1,0 +1,1680 @@
+{
+  "environment": {
+    "provider": "local",
+    "model": "qwen3.5-9b",
+    "thinking": false,
+    "db": [
+      {
+        "version": "8.0.35",
+        "db": "harness"
+      }
+    ],
+    "grants": [
+      {
+        "Grants for harness_ro@%": "GRANT USAGE ON *.* TO `harness_ro`@`%`"
+      },
+      {
+        "Grants for harness_ro@%": "GRANT SELECT ON `harness`.* TO `harness_ro`@`%`"
+      }
+    ]
+  },
+  "gold_execution": {
+    "total": 31,
+    "nonempty": 31
+  },
+  "replay": {
+    "baseline": {
+      "correct": 20,
+      "changed": [],
+      "records": [
+        {
+          "id": "Q01",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 106
+            }
+          ],
+          "candidate": [
+            {
+              "ticket_count": 106
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q02",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "industry": "Education",
+              "total_deal_value": "1993730.23"
+            },
+            {
+              "industry": "Energy",
+              "total_deal_value": "1226923.90"
+            },
+            {
+              "industry": "Fintech",
+              "total_deal_value": "1429616.40"
+            },
+            {
+              "industry": "Healthcare",
+              "total_deal_value": "1453940.76"
+            },
+            {
+              "industry": "Logistics",
+              "total_deal_value": "1828788.80"
+            },
+            {
+              "industry": "Manufacturing",
+              "total_deal_value": "791844.09"
+            },
+            {
+              "industry": "Media",
+              "total_deal_value": "1375050.27"
+            },
+            {
+              "industry": "Retail",
+              "total_deal_value": "1082856.54"
+            }
+          ],
+          "candidate": [
+            {
+              "industry": "Education",
+              "total_won_deals": "1993730.23"
+            },
+            {
+              "industry": "Logistics",
+              "total_won_deals": "1828788.80"
+            },
+            {
+              "industry": "Retail",
+              "total_won_deals": "1082856.54"
+            },
+            {
+              "industry": "Healthcare",
+              "total_won_deals": "1453940.76"
+            },
+            {
+              "industry": "Manufacturing",
+              "total_won_deals": "791844.09"
+            },
+            {
+              "industry": "Media",
+              "total_won_deals": "1375050.27"
+            },
+            {
+              "industry": "Fintech",
+              "total_won_deals": "1429616.40"
+            },
+            {
+              "industry": "Energy",
+              "total_won_deals": "1226923.90"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q03",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "full_name": "Noor Ito",
+              "n_customers": 8
+            }
+          ],
+          "candidate": [
+            {
+              "full_name": "Noor Ito",
+              "customer_count": 8
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q04",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 289
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 289
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q05",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "status": "lost",
+              "n": 64
+            },
+            {
+              "status": "won",
+              "n": 114
+            }
+          ],
+          "candidate": [
+            {
+              "won_deals": "114",
+              "lost_deals": "64"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q06",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "tier": "enterprise",
+              "n": 22
+            },
+            {
+              "tier": "free",
+              "n": 16
+            },
+            {
+              "tier": "growth",
+              "n": 34
+            },
+            {
+              "tier": "starter",
+              "n": 44
+            }
+          ],
+          "candidate": [
+            {
+              "tier": "enterprise",
+              "active_subscription_count": 22
+            },
+            {
+              "tier": "starter",
+              "active_subscription_count": 44
+            },
+            {
+              "tier": "growth",
+              "active_subscription_count": 34
+            },
+            {
+              "tier": "free",
+              "active_subscription_count": 16
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q07",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "n": 25
+            }
+          ],
+          "candidate": [
+            {
+              "mismatch_count": 26
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q08",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "list_price_usd": "361.79"
+            }
+          ],
+          "candidate": [
+            {
+              "list_price_usd": "299.00"
+            },
+            {
+              "list_price_usd": "99.00"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q09",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 152
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 152
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q10",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "outstanding_usd": "340874.00"
+            }
+          ],
+          "candidate": [
+            {
+              "total_outstanding_usd": "1228508.000000"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q11",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "max_value": "400.0000"
+            }
+          ],
+          "candidate": [
+            {
+              "highest_usage_value": "N/A"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q12",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "n": 1490
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 9714
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q13",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "avg_value": "197.5130"
+            }
+          ],
+          "candidate": [
+            {
+              "average_event_value": "185.9762"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q14",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 121
+            }
+          ],
+          "candidate": [
+            {
+              "distinct_company_count": 121
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q15",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "norm": "bluesolutions",
+              "n": 3
+            },
+            {
+              "norm": "copperanalytics",
+              "n": 2
+            },
+            {
+              "norm": "granitegroup",
+              "n": 2
+            },
+            {
+              "norm": "graniteholdings",
+              "n": 2
+            },
+            {
+              "norm": "summitsystems",
+              "n": 2
+            },
+            {
+              "norm": "vertexanalytics",
+              "n": 2
+            }
+          ],
+          "candidate": [
+            {
+              "normalized_name": "bluesolutions",
+              "record_count": 3
+            },
+            {
+              "normalized_name": "copperanalytics",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "granitegroup",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "graniteholdings",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "summitsystems",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "vertexanalytics",
+              "record_count": 2
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q16",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "n": 76
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 74
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q17",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 4986
+            }
+          ],
+          "candidate": [
+            {
+              "batch_event_count": 4986
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q18",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "source": "api",
+              "min_utc": "2025-09-01 01:26:56",
+              "max_utc": "2026-09-01 21:20:24"
+            },
+            {
+              "source": "batch",
+              "min_utc": "2025-09-01 01:17:03",
+              "max_utc": "2026-09-01 21:40:50"
+            },
+            {
+              "source": "web",
+              "min_utc": "2025-09-01 00:11:55",
+              "max_utc": "2026-09-01 23:55:20"
+            }
+          ],
+          "candidate": [
+            {
+              "source": "api",
+              "earliest_event_utc": "2025-09-01 01:26:56",
+              "latest_event_utc": "2026-09-01 21:20:24"
+            },
+            {
+              "source": "web",
+              "earliest_event_utc": "2025-09-01 00:11:55",
+              "latest_event_utc": "2026-09-01 23:55:20"
+            },
+            {
+              "source": "batch",
+              "earliest_event_utc": "2025-08-31 21:17:03",
+              "latest_event_utc": "2026-09-01 17:40:50"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q19",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 48
+            }
+          ],
+          "candidate": [
+            {
+              "ticket_count": 48
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q20",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 800
+            }
+          ],
+          "candidate": [
+            {
+              "total_tickets": 800
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q21",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 22
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 22
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q22",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 10
+            }
+          ],
+          "candidate": [
+            {
+              "churned_count": 10
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q23",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "revenue_usd": "2030949.00"
+            }
+          ],
+          "candidate": [
+            {
+              "total_revenue_usd": "11325360.000000"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q24",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 271
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 271
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q25",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "won_net_usd": "10354399.06"
+            }
+          ],
+          "candidate": [],
+          "error": "MySQL error 1054: Unknown column 'd.tax_included' in 'field list'"
+        },
+        {
+          "id": "C01",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 40
+            }
+          ],
+          "candidate": [
+            {
+              "total_employees": 40
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C02",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 7
+            }
+          ],
+          "candidate": [
+            {
+              "employees_left": 7
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C03",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "max_budget": "88745.18"
+            }
+          ],
+          "candidate": [
+            {
+              "largest_campaign_budget": "88745.18"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C04",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "industry": "Education"
+            },
+            {
+              "industry": "Energy"
+            },
+            {
+              "industry": "Fintech"
+            },
+            {
+              "industry": "Healthcare"
+            },
+            {
+              "industry": "Logistics"
+            },
+            {
+              "industry": "Manufacturing"
+            },
+            {
+              "industry": "Media"
+            },
+            {
+              "industry": "Retail"
+            }
+          ],
+          "candidate": [
+            {
+              "industry": "Education"
+            },
+            {
+              "industry": "Energy"
+            },
+            {
+              "industry": "Fintech"
+            },
+            {
+              "industry": "Healthcare"
+            },
+            {
+              "industry": "Logistics"
+            },
+            {
+              "industry": "Manufacturing"
+            },
+            {
+              "industry": "Media"
+            },
+            {
+              "industry": "Retail"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C05",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 6
+            }
+          ],
+          "candidate": [
+            {
+              "distinct_sku_count": 6
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C06",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 217
+            }
+          ],
+          "candidate": [
+            {
+              "p1_ticket_count": 217
+            }
+          ],
+          "error": null
+        }
+      ]
+    },
+    "harness": {
+      "correct": 28,
+      "changed": [],
+      "records": [
+        {
+          "id": "Q01",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 106
+            }
+          ],
+          "candidate": [
+            {
+              "ticket_count": 106
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q02",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "industry": "Education",
+              "total_deal_value": "1993730.23"
+            },
+            {
+              "industry": "Energy",
+              "total_deal_value": "1226923.90"
+            },
+            {
+              "industry": "Fintech",
+              "total_deal_value": "1429616.40"
+            },
+            {
+              "industry": "Healthcare",
+              "total_deal_value": "1453940.76"
+            },
+            {
+              "industry": "Logistics",
+              "total_deal_value": "1828788.80"
+            },
+            {
+              "industry": "Manufacturing",
+              "total_deal_value": "791844.09"
+            },
+            {
+              "industry": "Media",
+              "total_deal_value": "1375050.27"
+            },
+            {
+              "industry": "Retail",
+              "total_deal_value": "1082856.54"
+            }
+          ],
+          "candidate": [
+            {
+              "industry": "Education",
+              "total_won_deals": "1993730.23"
+            },
+            {
+              "industry": "Logistics",
+              "total_won_deals": "1828788.80"
+            },
+            {
+              "industry": "Healthcare",
+              "total_won_deals": "1453940.76"
+            },
+            {
+              "industry": "Fintech",
+              "total_won_deals": "1429616.40"
+            },
+            {
+              "industry": "Media",
+              "total_won_deals": "1375050.27"
+            },
+            {
+              "industry": "Energy",
+              "total_won_deals": "1226923.90"
+            },
+            {
+              "industry": "Retail",
+              "total_won_deals": "1082856.54"
+            },
+            {
+              "industry": "Manufacturing",
+              "total_won_deals": "791844.09"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q03",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "full_name": "Noor Ito",
+              "n_customers": 8
+            }
+          ],
+          "candidate": [
+            {
+              "full_name": "Noor Ito",
+              "customer_count": 8
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q04",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 289
+            }
+          ],
+          "candidate": [
+            {
+              "count": 289
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q05",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "status": "lost",
+              "n": 64
+            },
+            {
+              "status": "won",
+              "n": 114
+            }
+          ],
+          "candidate": [
+            {
+              "status": "won",
+              "count": 114
+            },
+            {
+              "status": "lost",
+              "count": 64
+            },
+            {
+              "status": "open",
+              "count": 122
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q06",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "tier": "enterprise",
+              "n": 22
+            },
+            {
+              "tier": "free",
+              "n": 16
+            },
+            {
+              "tier": "growth",
+              "n": 34
+            },
+            {
+              "tier": "starter",
+              "n": 44
+            }
+          ],
+          "candidate": [
+            {
+              "tier": "enterprise",
+              "active_count": 22
+            },
+            {
+              "tier": "free",
+              "active_count": 16
+            },
+            {
+              "tier": "growth",
+              "active_count": 34
+            },
+            {
+              "tier": "starter",
+              "active_count": 44
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q07",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 25
+            }
+          ],
+          "candidate": [
+            {
+              "disagree_count": 25
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q08",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "list_price_usd": "361.79"
+            }
+          ],
+          "candidate": [
+            {
+              "list_price_usd": "361.79"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q09",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 152
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 152
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q10",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "outstanding_usd": "340874.00"
+            }
+          ],
+          "candidate": [
+            {
+              "total_outstanding_usd": "1228508.000000"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q11",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "max_value": "400.0000"
+            }
+          ],
+          "candidate": [
+            {
+              "highest_usage": "400.0000"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q12",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 1490
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 1490
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q13",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "avg_value": "197.5130"
+            }
+          ],
+          "candidate": [
+            {
+              "avg_event_value": "197.51301715"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q14",
+          "saved_correct": false,
+          "replayed_correct": false,
+          "gold": [
+            {
+              "n": 121
+            }
+          ],
+          "candidate": [
+            {
+              "company_name": "Bluespire Labs Inc"
+            },
+            {
+              "company_name": "Cedarbridge Holdings, Inc."
+            },
+            {
+              "company_name": "Copper Labs Ltd."
+            },
+            {
+              "company_name": "Harbor Systems, Inc."
+            },
+            {
+              "company_name": "Ironworks Holdings Ltd."
+            },
+            {
+              "company_name": "Summit Systems, Inc."
+            },
+            {
+              "company_name": "Tidal Analytics Incorporated"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q15",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "norm": "bluesolutions",
+              "n": 3
+            },
+            {
+              "norm": "copperanalytics",
+              "n": 2
+            },
+            {
+              "norm": "granitegroup",
+              "n": 2
+            },
+            {
+              "norm": "graniteholdings",
+              "n": 2
+            },
+            {
+              "norm": "summitsystems",
+              "n": 2
+            },
+            {
+              "norm": "vertexanalytics",
+              "n": 2
+            }
+          ],
+          "candidate": [
+            {
+              "normalized_name": "bluesolutions",
+              "record_count": 3
+            },
+            {
+              "normalized_name": "copperanalytics",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "granitegroup",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "graniteholdings",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "summitsystems",
+              "record_count": 2
+            },
+            {
+              "normalized_name": "vertexanalytics",
+              "record_count": 2
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q16",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 76
+            }
+          ],
+          "candidate": [
+            {
+              "event_count": 76
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q17",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 4986
+            }
+          ],
+          "candidate": [
+            {
+              "batch_event_count": 4986
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q18",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "source": "api",
+              "min_utc": "2025-09-01 01:26:56",
+              "max_utc": "2026-09-01 21:20:24"
+            },
+            {
+              "source": "batch",
+              "min_utc": "2025-09-01 01:17:03",
+              "max_utc": "2026-09-01 21:40:50"
+            },
+            {
+              "source": "web",
+              "min_utc": "2025-09-01 00:11:55",
+              "max_utc": "2026-09-01 23:55:20"
+            }
+          ],
+          "candidate": [
+            {
+              "source": "api",
+              "earliest_event_utc": "2025-09-01 01:26:56",
+              "latest_event_utc": "2026-09-01 21:20:24"
+            },
+            {
+              "source": "batch",
+              "earliest_event_utc": "2025-09-01 01:17:03",
+              "latest_event_utc": "2026-09-01 21:40:50"
+            },
+            {
+              "source": "web",
+              "earliest_event_utc": "2025-09-01 00:11:55",
+              "latest_event_utc": "2026-09-01 23:55:20"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q19",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 48
+            }
+          ],
+          "candidate": [
+            {
+              "orphaned_ticket_count": 48
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q20",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 800
+            }
+          ],
+          "candidate": [
+            {
+              "total_tickets": 800
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q21",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 22
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 22
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q22",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 10
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(DISTINCT customer_id)": 10
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q23",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "revenue_usd": "2030949.00"
+            }
+          ],
+          "candidate": [
+            {
+              "total_revenue_usd": "2030949.000000"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q24",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 271
+            }
+          ],
+          "candidate": [
+            {
+              "missing_currency_flag": 271
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "Q25",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "won_net_usd": "10354399.06"
+            }
+          ],
+          "candidate": [
+            {
+              "total_net_value": "10354399.064815"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C01",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 40
+            }
+          ],
+          "candidate": [
+            {
+              "total_employees": 40
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C02",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 7
+            }
+          ],
+          "candidate": [
+            {
+              "count": 7
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C03",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "max_budget": "88745.18"
+            }
+          ],
+          "candidate": [
+            {
+              "largest_budget": "88745.18"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C04",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "industry": "Education"
+            },
+            {
+              "industry": "Energy"
+            },
+            {
+              "industry": "Fintech"
+            },
+            {
+              "industry": "Healthcare"
+            },
+            {
+              "industry": "Logistics"
+            },
+            {
+              "industry": "Manufacturing"
+            },
+            {
+              "industry": "Media"
+            },
+            {
+              "industry": "Retail"
+            }
+          ],
+          "candidate": [
+            {
+              "industry": "Education"
+            },
+            {
+              "industry": "Energy"
+            },
+            {
+              "industry": "Fintech"
+            },
+            {
+              "industry": "Healthcare"
+            },
+            {
+              "industry": "Logistics"
+            },
+            {
+              "industry": "Manufacturing"
+            },
+            {
+              "industry": "Media"
+            },
+            {
+              "industry": "Retail"
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C05",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 6
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(DISTINCT sku)": 6
+            }
+          ],
+          "error": null
+        },
+        {
+          "id": "C06",
+          "saved_correct": true,
+          "replayed_correct": true,
+          "gold": [
+            {
+              "n": 217
+            }
+          ],
+          "candidate": [
+            {
+              "COUNT(*)": 217
+            }
+          ],
+          "error": null
+        }
+      ]
+    }
+  },
+  "q05_semantic_check": [
+    {
+      "won_deals": "114",
+      "lost_deals": "64"
+    }
+  ],
+  "d6_counts": [
+    {
+      "rows_n": 128,
+      "raw_distinct": 121,
+      "gold_distinct": 121
+    }
+  ],
+  "d6_injected_pairs": [
+    {
+      "duplicate_id": 1121,
+      "variant": "Cedarbridge Holdings, Inc.",
+      "original_id": 1018,
+      "original_name": "Cedarbridge Holdings",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1122,
+      "variant": "Bluespire Labs Inc",
+      "original_id": 1024,
+      "original_name": "Bluespire Labs",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1123,
+      "variant": "Ironworks Holdings Ltd.",
+      "original_id": 1033,
+      "original_name": "Ironworks Holdings",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1124,
+      "variant": "Summit Systems, Inc.",
+      "original_id": 1050,
+      "original_name": "Summit Systems",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1124,
+      "variant": "Summit Systems, Inc.",
+      "original_id": 1057,
+      "original_name": "Summit Systems",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1125,
+      "variant": "Copper Labs Ltd.",
+      "original_id": 1077,
+      "original_name": "Copper Labs",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1126,
+      "variant": "Tidal Analytics Incorporated",
+      "original_id": 1100,
+      "original_name": "Tidal Analytics",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1127,
+      "variant": "Harbor Systems, Inc.",
+      "original_id": 1102,
+      "original_name": "Harbor Systems",
+      "gold_merges": 0
+    },
+    {
+      "duplicate_id": 1128,
+      "variant": "Ember Analytics LLC",
+      "original_id": 1111,
+      "original_name": "Ember Analytics",
+      "gold_merges": 0
+    }
+  ],
+  "grader_edges": {
+    "different_large_counts_accepted": true,
+    "different_cent_totals_accepted": true,
+    "inconsistent_column_swaps_accepted": true,
+    "wrong_explicit_order_accepted": true
+  },
+  "row_caps": [
+    {
+      "case": "default",
+      "ok": true,
+      "row_count": 200,
+      "truncated": true,
+      "sql": "SELECT event_id FROM usage_events LIMIT 200",
+      "error": null
+    },
+    {
+      "case": "explicit_large_limit",
+      "ok": true,
+      "row_count": 250,
+      "truncated": true,
+      "sql": "SELECT event_id FROM usage_events LIMIT 250",
+      "error": null
+    },
+    {
+      "case": "union",
+      "ok": true,
+      "row_count": 256,
+      "truncated": true,
+      "sql": "SELECT customer_id AS id FROM customers UNION ALL SELECT customer_id AS id FROM customers",
+      "error": null
+    }
+  ],
+  "incomplete_agent": [
+    {
+      "case": "provider_failure",
+      "question": "How many employees?",
+      "final_sql": "SELECT COUNT(*) AS n FROM employees LIMIT 200",
+      "rows": [
+        {
+          "n": 40
+        }
+      ],
+      "answer_text": "",
+      "steps": 2,
+      "tool_calls": [
+        "execute_sql"
+      ],
+      "error": "LLM call failed at step 2: review-induced local failure",
+      "usage": {},
+      "grader_would_pass": true
+    },
+    {
+      "case": "step_limit",
+      "question": "How many employees?",
+      "final_sql": "SELECT COUNT(*) AS n FROM employees LIMIT 200",
+      "rows": [
+        {
+          "n": 40
+        }
+      ],
+      "answer_text": "",
+      "steps": 1,
+      "tool_calls": [
+        "execute_sql"
+      ],
+      "error": "Hit the 1-step limit without a final answer.",
+      "usage": {},
+      "grader_would_pass": true
+    },
+    {
+      "case": "final_wrong_sql",
+      "question": "How many employees?",
+      "final_sql": "SELECT COUNT(*) AS n FROM employees LIMIT 200",
+      "rows": [
+        {
+          "n": 40
+        }
+      ],
+      "answer_text": "```sql\nSELECT 999 AS n\n```",
+      "steps": 2,
+      "tool_calls": [
+        "execute_sql"
+      ],
+      "error": null,
+      "usage": {},
+      "grader_would_pass": true
+    }
+  ],
+  "ambiguous_joins": [
+    {
+      "child": "employees.manager_id",
+      "parent": "product_catalog.catalog_id",
+      "containment": 1.0,
+      "coverage": 0.2857142857142857,
+      "child_distinct": 6,
+      "parent_distinct": 21,
+      "orphan_values": 0,
+      "orphan_rows": 0,
+      "alternatives": [
+        "employees.employee_id"
+      ]
+    }
+  ],
+  "schema_join_block": "\n# INFERRED -- this database declares no FK constraints.\n# Verify with a LEFT JOIN before trusting any of these.\ndeals.campaign_id = campaigns.campaign_id\ndeals.owner_id = employees.employee_id\nsubscriptions.customer_id = customers.customer_id\nsupport_tickets.assigned_to = employees.employee_id\nusage_events.customer_id = customers.customer_id\ncustomers.account_manager_id = employees.employee_id\nsupport_tickets.cust_id = customers.customer_id\ndeals.acct_id = customers.customer_id\ninvoices.cust_id = customers.customer_id\ninvoices.subscription_id = subscriptions.subscription_id\nchurn_log.customer_id = customers.customer_id\nemployees.manager_id = product_catalog.catalog_id",
+  "fresh_independent_oracles": {
+    "R01": {
+      "raw_records_calculation": "198.0772368872128899554336647",
+      "sql_oracle": "198.07723689",
+      "absolute_difference": "2.7871100445663353E-9"
+    },
+    "R02": {
+      "raw_records_calculation": "1690075.00",
+      "sql_oracle": "1690075.000000",
+      "absolute_difference": "0.000000"
+    },
+    "R03": {
+      "raw_records_calculation": 84,
+      "sql_oracle": 84,
+      "absolute_difference": "0"
+    },
+    "R04": {
+      "raw_records_calculation": "119.79",
+      "sql_oracle": "119.79",
+      "absolute_difference": "0.00"
+    },
+    "R05": {
+      "raw_records_calculation": "6314213.101851851851851851852",
+      "sql_oracle": "6314213.101852",
+      "absolute_difference": "1.48148148148148E-7"
+    },
+    "R06": {
+      "raw_records_calculation": 17,
+      "sql_oracle": 17,
+      "absolute_difference": "0"
+    },
+    "R07": {
+      "raw_records_calculation": 9,
+      "sql_oracle": 9,
+      "absolute_difference": "0"
+    },
+    "R08": {
+      "raw_records_calculation": 187,
+      "sql_oracle": 187,
+      "absolute_difference": "0"
+    }
+  }
+}

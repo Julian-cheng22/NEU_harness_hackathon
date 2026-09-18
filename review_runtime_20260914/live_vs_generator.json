@@ -1,0 +1,42 @@
+{
+  "employees": {
+    "rows": 40,
+    "equals_generated_rows": true
+  },
+  "customers": {
+    "rows": 128,
+    "equals_generated_rows": true
+  },
+  "subscriptions": {
+    "rows": 128,
+    "equals_generated_rows": true
+  },
+  "invoices": {
+    "rows": 1902,
+    "equals_generated_rows": true
+  },
+  "usage_events": {
+    "rows": 25000,
+    "equals_generated_rows": true
+  },
+  "support_tickets": {
+    "rows": 800,
+    "equals_generated_rows": true
+  },
+  "campaigns": {
+    "rows": 12,
+    "equals_generated_rows": true
+  },
+  "deals": {
+    "rows": 300,
+    "equals_generated_rows": true
+  },
+  "product_catalog": {
+    "rows": 21,
+    "equals_generated_rows": true
+  },
+  "churn_log": {
+    "rows": 49,
+    "equals_generated_rows": true
+  }
+}

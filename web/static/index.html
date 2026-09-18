@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<!--
+  Harness dashboard + live A/B demo.
+
+  Opens two ways, on purpose:
+    1. Served by web/server.py  -> dashboard AND the live panel.
+    2. Double-clicked from disk -> dashboard only, reading web/static/data.js
+       (run `python -m web.build_data` to refresh it). No server, no database,
+       no model, no network. The measured numbers must not depend on anything
+       being up on demo day.
+-->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Harness vs baseline — text-to-SQL on messy data</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <h1>Harness <span class="vs">vs</span> baseline</h1>
+    <p class="sub">Same model, same questions, same database. The only variable is the harness.</p>
+  </div>
+  <div class="topbar-right">
+    <label class="field">
+      <span>Run</span>
+      <select id="run-picker" aria-label="Which eval run to display"></select>
+    </label>
+    <button id="theme-toggle" class="ghost-btn" aria-label="Toggle dark mode" title="Toggle dark mode">◐</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ===================================================================
+       1. The headline. One hero figure per view; the rest are stat tiles.
+       =================================================================== -->
+  <section class="card" id="headline">
+    <div class="hero-row">
+      <div class="hero">
+        <div class="hero-label">Accuracy lift from the harness</div>
+        <div class="hero-value" id="hero-lift">—</div>
+        <div class="hero-note" id="hero-note"></div>
+      </div>
+      <div class="tiles">
+        <div class="tile">
+          <div class="tile-label"><span class="key key-baseline"></span>Baseline · raw DDL, one shot</div>
+          <div class="tile-value" id="tile-baseline">—</div>
+          <div class="tile-meta" id="tile-baseline-meta"></div>
+        </div>
+        <div class="tile">
+          <div class="tile-label"><span class="key key-harness"></span>Harness · M-Schema + tools</div>
+          <div class="tile-value" id="tile-harness">—</div>
+          <div class="tile-meta" id="tile-harness-meta"></div>
+        </div>
+      </div>
+    </div>
+    <p class="footnote" id="headline-footnote"></p>
+  </section>
+
+  <!-- ===================================================================
+       2. The per-defect breakdown -- the actual result. An aggregate number
+          invites "on what?"; this answers it, including where it loses.
+       =================================================================== -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Accuracy by defect</h2>
+        <p class="sub">Which kind of mess the harness fixes — and which it does not.
+           Select a row to filter the questions below.</p>
+      </div>
+      <div class="seg" role="group" aria-label="View as chart or table">
+        <button class="seg-btn is-on" data-view="chart" aria-pressed="true">Chart</button>
+        <button class="seg-btn" data-view="table" aria-pressed="false">Table</button>
+      </div>
+    </div>
+
+    <div class="legend">
+      <span class="legend-item"><span class="key key-baseline"></span>Baseline</span>
+      <span class="legend-item"><span class="key key-harness"></span>Harness</span>
+      <span class="legend-spacer"></span>
+      <span class="legend-item muted" id="defect-filter-note"></span>
+    </div>
+
+    <div id="defect-chart" class="defect-chart"></div>
+    <div id="defect-table" class="hidden"></div>
+  </section>
+
+  <!-- ===================================================================
+       3. Question-level drill-down. Every claim above is one click from the
+          SQL that produced it.
+       =================================================================== -->
+  <section class="card">
+    <div class="card-head">
+      <div>
+        <h2>Questions</h2>
+        <p class="sub">Select any row for the gold query, what each arm wrote, and the harness tool trace.</p>
+      </div>
+      <div class="filters">
+        <input id="q-search" type="search" placeholder="Filter questions…" aria-label="Filter questions">
+        <button id="q-clear" class="ghost-btn">Clear</button>
+      </div>
+    </div>
+    <div id="question-list" class="qlist"></div>
+  </section>
+
+  <!-- ===================================================================
+       4. Live A/B. Needs the server, the database and a model; says so
+          plainly when it does not have them.
+       =================================================================== -->
+  <section class="card" id="live">
+    <div class="card-head">
+      <div>
+        <h2>Ask it live</h2>
+        <p class="sub">Runs both arms against the real database, baseline first.
+           The tool trace is the harness earning its keep.</p>
+      </div>
+      <div id="live-status" class="status-pill status-unknown">checking…</div>
+    </div>
+
+    <div id="live-blocked" class="notice hidden"></div>
+
+    <div class="ask-row">
+      <select id="ask-preset" aria-label="Pick a gold question">
+        <option value="">Pick a gold question… (graded against its gold answer)</option>
+      </select>
+      <input id="ask-input" type="text" placeholder="…or type any question about the database"
+             aria-label="Question to ask">
+      <button id="ask-run" class="primary-btn">Run both arms</button>
+    </div>
+
+    <div class="arena">
+      <div class="pane" id="pane-baseline">
+        <div class="pane-head"><span class="key key-baseline"></span>Baseline
+          <span class="pane-meta" id="meta-baseline"></span></div>
+        <div class="pane-body" id="body-baseline"><p class="muted">Idle.</p></div>
+      </div>
+      <div class="pane" id="pane-harness">
+        <div class="pane-head"><span class="key key-harness"></span>Harness
+          <span class="pane-meta" id="meta-harness"></span></div>
+        <div class="pane-body" id="body-harness"><p class="muted">Idle.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="page-foot">
+    <span id="foot-meta"></span>
+  </footer>
+</main>
+
+<div id="tooltip" class="tooltip" role="status" aria-live="polite"></div>
+
+<!-- Baked results, so the dashboard renders with the server off. The server
+     overrides this with a live /api/results fetch when one is available. -->
+<script src="data.js" onerror="window.__HARNESS_DATA__=window.__HARNESS_DATA__||null"></script>
+<script src="app.js"></script>
+</body>
+</html>

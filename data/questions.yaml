@@ -1,0 +1,455 @@
+# ============================================================================
+# Gold question set.
+#
+# GRADING IS BY EXECUTION, NOT BY STRING MATCH. At eval time we run `gold_sql`
+# live and compare its result set to the candidate's result set. That means the
+# gold answers cannot drift out of sync with the data -- but it also means
+# gold_sql MUST be correct, because a wrong gold answer silently inverts the
+# entire eval. tests/test_gold_answers.py executes every one of these and
+# checks it against `expect`.
+#
+# `expect` is a tripwire, not the grading key: if regenerating the dataset
+# changes an answer, the test fails loudly instead of the eval quietly
+# measuring nothing.
+#
+# `naive_sql` documents what a model typically writes WITHOUT the harness. It
+# is not executed during grading -- it exists so the writeup can show the exact
+# failure, and so reviewers can see the trap is real rather than contrived.
+#
+# defect_ids: [] marks a CONTROL question. Controls guard against the harness
+# *hurting* simple cases, which is a genuine risk when you fill a 9B model's
+# context with profiling output.
+# ============================================================================
+
+meta:
+  dataset_version: "1.0.0"
+  grading: execution_match
+  # Column ORDER and NAMES are ignored when comparing; row multiset is not.
+  compare: row_multiset
+
+questions:
+
+  # -------------------------------------------------------------------------
+  # D1 -- the customer key is spelled three ways
+  # -------------------------------------------------------------------------
+  - id: Q01
+    defect_ids: [D1]
+    question: How many support tickets were opened by customers in the Fintech industry?
+    answer_type: scalar
+    expect: null
+    gold_sql: |
+      SELECT COUNT(*) AS n
+      FROM support_tickets t
+      JOIN customers c ON c.customer_id = t.cust_id
+      WHERE c.industry = 'Fintech';
+    naive_sql: |
+      -- support_tickets has no `customer_id` column; this errors outright.
+      SELECT COUNT(*) FROM support_tickets t
+      JOIN customers c ON c.customer_id = t.customer_id
+      WHERE c.industry = 'Fintech';
+    notes: >
+      The join column is `cust_id`, not `customer_id`. This one at least fails
+      loudly with "Unknown column" rather than returning a wrong number.
+
+  - id: Q02
+    defect_ids: [D1]
+    question: What is the total value of won deals for each customer industry? Return industry and total.
+    answer_type: table
+    gold_sql: |
+      SELECT c.industry, ROUND(SUM(d.amount), 2) AS total_deal_value
+      FROM deals d
+      JOIN customers c ON c.customer_id = d.acct_id
+      WHERE d.status = 'won'
+      GROUP BY c.industry
+      ORDER BY c.industry;
+    notes: >
+      `deals.acct_id` is the customer key. It shares no substring with
+      `customer_id`, so lexical matching cannot find it -- only value overlap
+      can. This is the join that motivates harness/joins.py existing.
+
+  - id: Q03
+    defect_ids: [D1]
+    question: Which account manager owns the most customers? Return their name and the count.
+    answer_type: table
+    gold_sql: |
+      SELECT e.full_name, COUNT(*) AS n_customers
+      FROM customers c
+      JOIN employees e ON e.employee_id = c.account_manager_id
+      GROUP BY e.employee_id, e.full_name
+      ORDER BY n_customers DESC, e.employee_id ASC
+      LIMIT 1;
+    notes: >
+      `account_manager_id` references employees despite not being named
+      `employee_id`.
+
+  # -------------------------------------------------------------------------
+  # D2 -- `status` means different things on different tables
+  # -------------------------------------------------------------------------
+  - id: Q04
+    defect_ids: [D2, D4]
+    question: How many invoices are currently outstanding (unpaid)?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM invoices WHERE status = 'unpaid';
+    naive_sql: |
+      -- 'open' belongs to deals.status, not invoices.status. Returns 0 rows,
+      -- which a model reports as "there are no outstanding invoices".
+      SELECT COUNT(*) FROM invoices WHERE status = 'open';
+    notes: >
+      Three tables have a `status` column with three disjoint vocabularies:
+      invoices (paid/unpaid/void), deals (open/won/lost), subscriptions
+      (active/paused/cancelled).
+
+  - id: Q05
+    defect_ids: [D2]
+    question: How many deals have been won, and how many lost?
+    answer_type: table
+    gold_sql: |
+      SELECT status, COUNT(*) AS n
+      FROM deals
+      WHERE status IN ('won', 'lost')
+      GROUP BY status
+      ORDER BY status;
+
+  # -------------------------------------------------------------------------
+  # D3 -- stale denormalized copies
+  # -------------------------------------------------------------------------
+  - id: Q06
+    defect_ids: [D3]
+    question: How many active subscriptions are on each plan tier?
+    answer_type: table
+    gold_sql: |
+      SELECT tier, COUNT(*) AS n
+      FROM subscriptions
+      WHERE ended_on IS NULL AND status = 'active'
+      GROUP BY tier
+      ORDER BY tier;
+    naive_sql: |
+      -- customers.plan_tier is one join shallower and therefore tempting, but
+      -- it is a stale cache that disagrees for 25 accounts.
+      SELECT plan_tier, COUNT(*) FROM customers GROUP BY plan_tier;
+    notes: subscriptions.tier is the source of truth.
+
+  - id: Q07
+    defect_ids: [D3]
+    question: For how many customers does the cached plan_tier disagree with their live subscription tier?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n
+      FROM customers c
+      JOIN subscriptions s ON s.customer_id = c.customer_id
+      WHERE s.ended_on IS NULL
+        AND c.plan_tier IS NOT NULL
+        AND s.tier IS NOT NULL
+        AND c.plan_tier <> s.tier;
+
+  - id: Q08
+    defect_ids: [D3]
+    question: What is the current list price of the Growth plan?
+    answer_type: scalar
+    gold_sql: |
+      SELECT list_price_usd
+      FROM product_catalog
+      WHERE sku = 'SKU-GRW' AND effective_to IS NULL;
+    naive_sql: |
+      -- is_current was left wrong for SKU-GRW by a botched backfill, so this
+      -- returns a superseded price with total confidence.
+      SELECT list_price_usd FROM product_catalog
+      WHERE sku = 'SKU-GRW' AND is_current = 1;
+    notes: >
+      product_catalog is SCD-2. `effective_to IS NULL` identifies the live row;
+      the `is_current` flag is unreliable.
+
+  # -------------------------------------------------------------------------
+  # D4 -- NULL means two different things
+  # -------------------------------------------------------------------------
+  - id: Q09
+    defect_ids: [D4]
+    question: How many invoices are marked paid but have no recorded payment timestamp?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n
+      FROM invoices
+      WHERE status = 'paid' AND paid_at IS NULL;
+
+  - id: Q10
+    defect_ids: [D4, D10]
+    question: What is the total outstanding (unpaid) invoice amount, in US dollars?
+    answer_type: scalar
+    gold_sql: |
+      SELECT ROUND(SUM(
+        CASE
+          WHEN currency_minor = 1 THEN amount / 100
+          WHEN currency_minor = 0 THEN amount
+          WHEN issued_at < '2025-07-01' THEN amount / 100
+          ELSE amount
+        END), 2) AS outstanding_usd
+      FROM invoices
+      WHERE status = 'unpaid';
+    naive_sql: |
+      -- Two compounding errors: paid_at IS NULL is not "unpaid", and SUM on
+      -- the raw column adds cents to dollars.
+      SELECT SUM(amount) FROM invoices WHERE paid_at IS NULL;
+    notes: Requires both the status disambiguation (D4) and unit normalization (D10).
+
+  # -------------------------------------------------------------------------
+  # D5 -- numeric data stored as text, with junk
+  # -------------------------------------------------------------------------
+  - id: Q11
+    defect_ids: [D5]
+    question: What is the highest single usage value recorded in any event?
+    answer_type: scalar
+    gold_sql: |
+      SELECT MAX(CASE WHEN event_value REGEXP '^[0-9]+(\\.[0-9]+)?$'
+                      THEN CAST(event_value AS DECIMAL(18,4)) END) AS max_value
+      FROM usage_events;
+    naive_sql: |
+      -- MAX() on a VARCHAR compares LEXICALLY, not numerically: 'N/A' sorts
+      -- above '99.9', which sorts above '400'. No error, no warning, just the
+      -- wrong row.
+      SELECT MAX(event_value) FROM usage_events;
+    notes: >
+      NOTE: a plain SUM() is NOT a good trap here -- MySQL coerces 'N/A' to 0,
+      and zero contributes nothing, so SUM happens to give the right total.
+      The operations that actually break on numbers-stored-as-text are MAX/MIN
+      (lexical ordering), AVG (junk inflates the denominator) and COUNT(col)
+      (counts the junk rows). This question uses MAX; Q13 uses AVG.
+
+  - id: Q12
+    defect_ids: [D5]
+    question: How many usage events have a non-numeric event_value?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n
+      FROM usage_events
+      WHERE event_value IS NOT NULL
+        AND event_value NOT REGEXP '^[0-9]+(\\.[0-9]+)?$';
+
+  - id: Q13
+    defect_ids: [D5]
+    question: What is the average event value for the feature 'api.query'?
+    answer_type: scalar
+    gold_sql: |
+      SELECT ROUND(AVG(
+        CASE WHEN event_value REGEXP '^[0-9]+(\\.[0-9]+)?$'
+             THEN CAST(event_value AS DECIMAL(18,4)) END), 4) AS avg_value
+      FROM usage_events
+      WHERE feature_key = 'api.query';
+    naive_sql: |
+      -- The junk rows coerce to 0 AND stay in the denominator, so the mean is
+      -- dragged down. Unlike SUM, AVG genuinely breaks here.
+      SELECT AVG(event_value) FROM usage_events WHERE feature_key = 'api.query';
+    notes: >
+      AVG is the aggregate that actually breaks on this column: junk is coerced
+      to 0 and still counted, so the mean is biased downward.
+
+  # -------------------------------------------------------------------------
+  # D6 -- duplicate entities
+  # -------------------------------------------------------------------------
+  - id: Q14
+    defect_ids: [D6]
+    question: How many distinct companies are in the customer table? Companies appear under more than one record.
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(DISTINCT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', ''))) AS n
+      FROM customers;
+    naive_sql: |
+      SELECT COUNT(*) FROM customers;          -- counts duplicate records
+    notes: >
+      The same organisation exists under multiple customer_ids with name
+      variants like 'Acme' vs 'Acme, Inc.'.
+
+  - id: Q15
+    defect_ids: [D6]
+    question: Which company names appear more than once after normalizing case and punctuation? Return the normalized name and how many records it has.
+    answer_type: table
+    gold_sql: |
+      SELECT norm, COUNT(*) AS n FROM (
+        SELECT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', '')) AS norm
+        FROM customers
+      ) t
+      GROUP BY norm
+      HAVING COUNT(*) > 1
+      ORDER BY n DESC, norm ASC;
+
+  # -------------------------------------------------------------------------
+  # D7 -- mixed timezones, no timezone column
+  # -------------------------------------------------------------------------
+  - id: Q16
+    defect_ids: [D7]
+    question: How many usage events occurred on 2026-08-15 in UTC?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n
+      FROM usage_events
+      WHERE (CASE WHEN source = 'batch' THEN event_ts + INTERVAL 4 HOUR ELSE event_ts END)
+              >= '2026-08-15 00:00:00'
+        AND (CASE WHEN source = 'batch' THEN event_ts + INTERVAL 4 HOUR ELSE event_ts END)
+              <  '2026-08-16 00:00:00';
+    naive_sql: |
+      SELECT COUNT(*) FROM usage_events
+      WHERE DATE(event_ts) = '2026-08-15';     -- mis-buckets every batch row
+    notes: source='batch' rows are US/Eastern (UTC-4); everything else is UTC.
+
+  - id: Q17
+    defect_ids: [D7]
+    question: How many usage events came from the batch source, and therefore need a timezone correction?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM usage_events WHERE source = 'batch';
+
+  - id: Q18
+    defect_ids: [D7]
+    question: For each event source, what is the earliest and latest event timestamp after converting everything to UTC?
+    answer_type: table
+    gold_sql: |
+      SELECT source,
+             MIN(CASE WHEN source = 'batch' THEN event_ts + INTERVAL 4 HOUR ELSE event_ts END) AS min_utc,
+             MAX(CASE WHEN source = 'batch' THEN event_ts + INTERVAL 4 HOUR ELSE event_ts END) AS max_utc
+      FROM usage_events
+      GROUP BY source
+      ORDER BY source;
+
+  # -------------------------------------------------------------------------
+  # D8 -- orphaned foreign keys
+  # -------------------------------------------------------------------------
+  - id: Q19
+    defect_ids: [D8]
+    question: How many support tickets reference a customer record that no longer exists?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n
+      FROM support_tickets t
+      LEFT JOIN customers c ON c.customer_id = t.cust_id
+      WHERE t.cust_id IS NOT NULL AND c.customer_id IS NULL;
+
+  - id: Q20
+    defect_ids: [D8]
+    question: What is the total number of support tickets, including any whose customer record is missing?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM support_tickets;
+    naive_sql: |
+      -- An INNER JOIN silently drops the orphans and undercounts.
+      SELECT COUNT(*) FROM support_tickets t
+      JOIN customers c ON c.customer_id = t.cust_id;
+    notes: >
+      The trap is that a model reaches for the join even when no customer
+      attribute is needed. The correct answer requires no join at all.
+
+  # -------------------------------------------------------------------------
+  # D9 -- undocumented enum values
+  # -------------------------------------------------------------------------
+  - id: Q21
+    defect_ids: [D9]
+    question: How many churn records use a reason code that is NOT documented in the schema?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM churn_log WHERE reason_code > 4;
+    notes: >
+      The column comment documents codes 1-4. The data contains 1-9. A model
+      that trusts the comment either mislabels or drops codes 5-9.
+
+  - id: Q22
+    defect_ids: [D9]
+    question: How many customers are still churned, i.e. they churned and have not been won back?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM churn_log WHERE recovered_on IS NULL;
+    naive_sql: |
+      SELECT COUNT(*) FROM churn_log;          -- includes accounts that returned
+    notes: >
+      churn_log is an append-only historical log, not current state.
+      recovered_on IS NOT NULL means the account came back.
+
+  # -------------------------------------------------------------------------
+  # D10 -- mixed units and tax semantics
+  # -------------------------------------------------------------------------
+  - id: Q23
+    defect_ids: [D10]
+    question: What is the total invoiced revenue in US dollars, excluding voided invoices?
+    answer_type: scalar
+    gold_sql: |
+      SELECT ROUND(SUM(
+        CASE
+          WHEN currency_minor = 1 THEN amount / 100
+          WHEN currency_minor = 0 THEN amount
+          WHEN issued_at < '2025-07-01' THEN amount / 100
+          ELSE amount
+        END), 2) AS revenue_usd
+      FROM invoices
+      WHERE status <> 'void';
+    naive_sql: |
+      SELECT SUM(amount) FROM invoices;        -- adds cents to dollars, ~100x off
+    notes: >
+      currency_minor is NULL for ~15% of rows; fall back to the biller cutover
+      date (2025-07-01) to resolve those.
+
+  - id: Q24
+    defect_ids: [D10]
+    question: How many invoices are missing the currency unit flag?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM invoices WHERE currency_minor IS NULL;
+
+  - id: Q25
+    defect_ids: [D10]
+    question: What is the total value of won deals, net of tax?
+    answer_type: scalar
+    gold_sql: |
+      SELECT ROUND(SUM(amount / 1.08), 2) AS won_net_usd
+      FROM deals
+      WHERE status = 'won';
+    naive_sql: |
+      SELECT SUM(amount) FROM deals WHERE status = 'won';   -- tax-inclusive
+    notes: >
+      deals.amount is tax-INCLUSIVE; invoices.amount is tax-exclusive.
+      Comparing them without adjusting invents an ~8% discrepancy.
+
+  # -------------------------------------------------------------------------
+  # CONTROLS -- answerable from raw DDL alone.
+  # If the harness does WORSE on these, it is costing more than it earns.
+  # -------------------------------------------------------------------------
+  - id: C01
+    defect_ids: []
+    question: How many employees are there in total?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM employees;
+
+  - id: C02
+    defect_ids: []
+    question: How many employees have left the company?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM employees WHERE left_on IS NOT NULL;
+
+  - id: C03
+    defect_ids: []
+    question: What is the largest campaign budget?
+    answer_type: scalar
+    gold_sql: |
+      SELECT MAX(budget_usd) AS max_budget FROM campaigns;
+
+  - id: C04
+    defect_ids: []
+    question: Which industries are represented among customers? List them alphabetically.
+    answer_type: table
+    gold_sql: |
+      SELECT DISTINCT industry FROM customers
+      WHERE industry IS NOT NULL
+      ORDER BY industry;
+
+  - id: C05
+    defect_ids: []
+    question: How many distinct product SKUs exist in the catalog?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(DISTINCT sku) AS n FROM product_catalog;
+
+  - id: C06
+    defect_ids: []
+    question: How many support tickets are marked priority P1?
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(*) AS n FROM support_tickets WHERE priority = 'P1';
