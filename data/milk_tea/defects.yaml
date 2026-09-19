@@ -1,0 +1,78 @@
+dataset_version: milk-tea-1.0.0
+defects:
+- id: MT01
+  title: 箱／杯混合计量单位
+  description: Historical exports mix box and cup quantities; pack sizes vary by material.
+  correct_rule: Convert qty with materials.units_per_box when unit='box'; base unit is cup.
+  naive_failure: SUM(qty) adds boxes directly to cups.
+  evidence_sql: SELECT COUNT(*) AS evidence FROM sales WHERE unit='box'
+  affected_export_rows: 1781
+  manifest_key: MT01
+  scope: Synthetic benchmark convention, not a claim about the source company
+- id: MT02
+  title: 跨系统状态口径不同
+  description: Draft and void documents coexist with posted/approved business events.
+  correct_rule: sales approved; sales_returns C; stock_in/out posted; production_receipts completed. Other states
+    have no booked/stock effect.
+  naive_failure: Reuse one status literal across tables or count draft documents.
+  evidence_sql: SELECT COUNT(*) AS evidence FROM sales WHERE status='draft'
+  affected_export_rows: 1303
+  manifest_key: MT02
+  scope: Synthetic benchmark convention, not a claim about the source company
+- id: MT03
+  title: 旧系统退货使用负数
+  description: The legacy return exporter uses signed credit quantities and amounts; ERP uses positive magnitudes.
+  correct_rule: 'Both represent returns: ABS(qty) and ABS(refund_net), once per approved return.'
+  naive_failure: Signed and unsigned returns cancel each other when summed.
+  evidence_sql: SELECT COUNT(*) AS evidence FROM sales_returns WHERE qty<0
+  affected_export_rows: 150
+  manifest_key: MT03
+  scope: Synthetic benchmark convention, not a claim about the source company
+- id: MT04
+  title: ETL重复导入
+  description: 40 purchase movements were replayed, acquiring fresh export row IDs.
+  correct_rule: stock_in movement_key identifies a business event; replay payloads are identical. Keep the smallest
+    row_id per movement_key.
+  naive_failure: Distinct row_id cannot remove business duplicates.
+  evidence_sql: SELECT COUNT(*)-COUNT(DISTINCT movement_key) AS evidence FROM stock_in
+  affected_export_rows: 40
+  manifest_key: MT04
+  scope: Synthetic benchmark convention, not a claim about the source company
+- id: MT05
+  title: 表头金额重复摊在明细行
+  description: Two sales lines per document each carry the same header total.
+  correct_rule: SUM(line_tax_amount), or one order_total per order_code. SUM(DISTINCT order_total) is unsafe because
+    unrelated orders can have equal amounts.
+  naive_failure: SUM(order_total) over line-grain exports doubles the order value.
+  evidence_sql: SELECT COUNT(*)-COUNT(DISTINCT order_code) AS evidence FROM sales
+  affected_export_rows: 4000
+  manifest_key: MT05
+  scope: Synthetic benchmark convention, not a claim about the source company
+- id: MT06
+  title: 生产入库与库存入库重复计数
+  description: Every production receipt is mirrored into stock_in by source_line_id.
+  correct_rule: stock_in is the physical inbound ledger including production and returns. Do not add production_receipts
+    or sales_returns to that ledger.
+  naive_failure: UNION ALL production receipts and stock-in counts the same receipt twice.
+  evidence_sql: SELECT COUNT(*) AS evidence FROM stock_in WHERE source_type='production'
+  affected_export_rows: 950
+  manifest_key: MT06
+  scope: Synthetic benchmark convention, not a claim about the source company
+- id: MT07
+  title: 重量读数混有文本占位符
+  description: A scale import stores decimal kg readings as VARCHAR with N/A and empty strings.
+  correct_rule: Exclude unavailable readings from AVG denominator; validate numeric syntax and CAST before MAX/AVG.
+  naive_failure: MAX sorts strings; AVG converts junk to zero and retains it in the denominator.
+  evidence_sql: SELECT COUNT(*) AS evidence FROM stock_out WHERE weight_text IN ('N/A','')
+  affected_export_rows: 130
+  manifest_key: MT07
+  scope: Synthetic benchmark convention, not a claim about the source company
+- id: MT08
+  title: 缺失过账时间不代表未过账
+  description: A webhook missed timestamps on some posted inbound records; drafts also have NULL timestamps.
+  correct_rule: status determines posting, not posted_at. For physical movements additionally deduplicate movement_key.
+  naive_failure: posted_at IS NULL incorrectly classifies some posted receipts as drafts.
+  evidence_sql: SELECT COUNT(*) AS evidence FROM stock_in WHERE status='posted' AND posted_at IS NULL
+  affected_export_rows: 154
+  manifest_key: MT08
+  scope: Synthetic benchmark convention, not a claim about the source company

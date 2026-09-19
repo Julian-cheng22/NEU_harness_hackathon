@@ -52,11 +52,11 @@ sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
 from eval.grade import matches  # noqa: E402
-from harness import agent, schema_card  # noqa: E402
+from harness import agent, schema_card, dataset  # noqa: E402
 from harness.db import DbConfig, list_tables  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
-OUT_DIR = ROOT / "eval" / "out"
+OUT_DIR = dataset.results_dir()
 
 app = FastAPI(title="Harness dashboard", docs_url=None, redoc_url=None)
 
@@ -65,14 +65,14 @@ app = FastAPI(title="Harness dashboard", docs_url=None, redoc_url=None)
 # Dashboard data -- pure file reads, no database
 # ---------------------------------------------------------------------------
 def _defects() -> list[dict[str, Any]]:
-    spec = yaml.safe_load((ROOT / "data" / "defects.yaml").read_text(encoding="utf-8"))
+    spec = yaml.safe_load((dataset.data_dir() / "defects.yaml").read_text(encoding="utf-8"))
     return [{"id": d["id"], "title": d["title"],
              "naive_failure": (d.get("naive_failure") or "").strip()}
             for d in spec["defects"]]
 
 
 def _questions() -> list[dict[str, Any]]:
-    spec = yaml.safe_load((ROOT / "data" / "questions.yaml").read_text(encoding="utf-8"))
+    spec = yaml.safe_load((dataset.data_dir() / "questions.yaml").read_text(encoding="utf-8"))
     return [{"id": q["id"], "question": q["question"],
              "defect_ids": q.get("defect_ids") or [],
              "gold_sql": (q.get("gold_sql") or "").strip(),
@@ -96,7 +96,7 @@ def _runs() -> list[dict[str, Any]]:
 
 
 def dashboard_payload() -> dict[str, Any]:
-    return {"defects": _defects(), "questions": _questions(), "runs": _runs(),
+    return {"dataset": dataset.name(), "defects": _defects(), "questions": _questions(), "runs": _runs(),
             "generated_at": time.strftime("%Y-%m-%d %H:%M:%S")}
 
 

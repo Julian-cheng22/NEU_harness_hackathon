@@ -1,0 +1,34 @@
+{
+  "dataset_version": "milk-tea-1.0.0",
+  "seed": 20260919,
+  "total_rows": 10000,
+  "rows_per_table": {
+    "materials": 20,
+    "warehouses": 4,
+    "customers": 26,
+    "sales": 4000,
+    "sales_returns": 600,
+    "stock_in": 2200,
+    "stock_out": 2200,
+    "production_receipts": 950
+  },
+  "questions": 20,
+  "controls": 3,
+  "affected_export_rows": {
+    "MT01": 1781,
+    "MT02": 1303,
+    "MT03": 150,
+    "MT04": 40,
+    "MT05": 4000,
+    "MT06": 950,
+    "MT07": 130,
+    "MT08": 154
+  },
+  "sha256": {
+    "schema.sql": "e04e1e9f61113282893bbe0f74f8d865ccb99f1c82881fd2b80398c1dc19118d",
+    "seed.sql": "1e243284346c753c1a48a188c1276bc5fc6b6582a3ed2a505dc2560a7e5293e9",
+    "questions.yaml": "0cc597d32bfe57aac0cd9453b1a61487725f998562226418f25da507f25afe59",
+    "defects.yaml": "ec66962f9754b8f612735d9fff47f994ef065d12be4ab4da1f9cb5d10b276a34",
+    "injection_manifest.json": "f29a40ab00309ca1f70f84849136eb7659c6c97b5c6496aafbc409031cbb7eed"
+  }
+}

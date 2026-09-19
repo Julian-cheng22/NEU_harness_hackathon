@@ -28,8 +28,6 @@ const STATE = {
   openQuestions: new Set(),
 };
 
-const DEFECT_ORDER = [...Array(10)].map((_, i) => `D${i + 1}`).concat('control');
-
 /* ---------------------------------------------------------------------------
    Boot
    --------------------------------------------------------------------------- */
@@ -139,7 +137,7 @@ function renderAll() {
   renderPresets();
   const runs = STATE.data.runs.length;
   $('#foot-meta').textContent =
-    `${runs} result file${runs === 1 ? '' : 's'} · ${STATE.data.questions.length} gold questions · ` +
+    `${STATE.data.dataset || 'saas'} · ${runs} result file${runs === 1 ? '' : 's'} · ${STATE.data.questions.length} gold questions · ` +
     `snapshot ${STATE.data.generated_at}`;
 }
 
@@ -196,7 +194,7 @@ function defectRows() {
   const titles = Object.fromEntries(STATE.data.defects.map((d) => [d.id, d.title]));
   titles.control = 'No defect involved';
 
-  return DEFECT_ORDER
+  return STATE.data.defects.map((d) => d.id).concat('control')
     .filter((id) => bd[id] || hd[id])
     .map((id) => {
       const b = bd[id] || { n: 0, correct: 0 };

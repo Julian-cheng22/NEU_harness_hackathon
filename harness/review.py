@@ -144,7 +144,8 @@ def render_markdown(path: Path | None = None, out: Path | None = None) -> Path:
     project already uses for data/defects.yaml and the README.
     """
     art = memory.load(path)
-    dest = out or (ROOT / "data" / "learned_schema.md")
+    from . import dataset
+    dest = out or (dataset.data_dir() / "learned_schema.md")
 
     lines = [
         "# Learned schema knowledge",

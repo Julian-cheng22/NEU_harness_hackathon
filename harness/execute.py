@@ -53,7 +53,11 @@ def _defect_notes(lowered: str) -> list[str]:
     from . import memory
 
     notes: list[str] = []
-    if memory.curated_hints_enabled():
+    from . import dataset
+    if memory.curated_hints_enabled() and dataset.name() == "milk_tea":
+        from .milk_tea import notes_for_sql
+        notes.extend(notes_for_sql(lowered))
+    elif memory.curated_hints_enabled():
         for col, why in _DIRTY_COLUMNS.items():
             if col in lowered:
                 notes.append(f"Query touches `{col}`: {why}.")
@@ -101,9 +105,16 @@ def explain(sql: str, cfg: DbConfig | None = None) -> dict[str, Any]:
     except Exception as e:
         return {"ok": False, "plan": [], "estimated_rows": 0, "error": str(e)}
 
-    est = 1
+    # EXPLAIN rows from separate SELECT/UNION/CTE blocks are not a single
+    # nested-loop join. Multiplying them all rejects small independent
+    # aggregates (e.g. inventory inflow minus outflow) as Cartesian products.
+    blocks: dict[int | None, int] = {}
     for step in plan:
-        est *= max(int(step.get("rows") or 1), 1)
+        block = step.get("id")
+        if step.get("select_type") == "UNION RESULT":
+            continue
+        blocks[block] = blocks.get(block, 1) * max(int(step.get("rows") or 1), 1)
+    est = sum(blocks.values())
     return {"ok": True, "plan": plan, "estimated_rows": est, "error": None}
 
 
@@ -127,7 +138,8 @@ def sanity_check(result: dict[str, Any], sql: str) -> list[str]:
                 "(b) did an INNER JOIN drop everything? Profile the column or "
                 "try a LEFT JOIN before concluding the answer is zero.")
         from . import memory
-        if memory.curated_hints_enabled():
+        from . import dataset
+        if memory.curated_hints_enabled() and dataset.name() == "saas":
             zero += (" Note that `status` uses a different vocabulary on invoices "
                      "(paid/unpaid/void), deals (open/won/lost) and subscriptions "
                      "(active/paused/cancelled).")

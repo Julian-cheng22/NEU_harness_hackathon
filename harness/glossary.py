@@ -281,12 +281,17 @@ def learned_terms() -> list[Term]:
 def active_glossary() -> list[Term]:
     """The terms this run is allowed to see, per HARNESS_KNOWLEDGE."""
     from . import memory
+    from . import dataset
+    curated = GLOSSARY
+    if dataset.name() == "milk_tea":
+        from .milk_tea import terms
+        curated = terms()
     mode = memory.knowledge_mode()
     if mode == "curated":
-        return GLOSSARY
+        return curated
     if mode == "discovered":
         return learned_terms()
-    return [*GLOSSARY, *learned_terms()]
+    return [*curated, *learned_terms()]
 
 
 # Question-shaped filler. Without this, a single shared word like "the" scores

@@ -28,9 +28,12 @@ from rich.table import Table
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-OUT_DIR = ROOT / "eval" / "out"
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env")
+from harness import dataset
+OUT_DIR = dataset.results_dir()
 
-DEFECT_ORDER = [f"D{i}" for i in range(1, 11)] + ["control"]
+DEFECT_ORDER = ([f"D{i}" for i in range(1, 11)] if dataset.name() == "saas" else [f"MT{i:02d}" for i in range(1, 9)]) + ["control"]
 
 
 def _load(arm: str, provider: str) -> dict | None:
@@ -41,7 +44,7 @@ def _load(arm: str, provider: str) -> dict | None:
 
 
 def _titles() -> dict[str, str]:
-    spec = yaml.safe_load((ROOT / "data" / "defects.yaml").read_text(encoding="utf-8"))
+    spec = yaml.safe_load((dataset.data_dir() / "defects.yaml").read_text(encoding="utf-8"))
     out = {d["id"]: d["title"] for d in spec["defects"]}
     out["control"] = "(control -- no defect involved)"
     return out

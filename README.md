@@ -1,5 +1,11 @@
 # NEU Harness Hackathon
 
+**New dataset:** [Milk-tea supply-chain documents](data/milk_tea/README.md) —
+10,000 synthetic rows, five document types, eight defects and 20 bilingual gold
+questions. Select with `HARNESS_DATASET=milk_tea DB_NAME=milk_tea`; the original
+SaaS benchmark remains the default. No model accuracy claim has yet been made
+for the new dataset.
+
 A **harness** that helps a small model answer analytical questions correctly over
 messy internal company data.
 

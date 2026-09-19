@@ -29,6 +29,7 @@ from typing import Any, Iterator
 import pymysql
 import sqlglot
 from sqlglot import exp
+from .dataset import database_name
 
 # Statements the agent is allowed to run. Anything else is refused before it
 # reaches MySQL so the model gets a useful error rather than a permissions blob.
@@ -45,7 +46,7 @@ class SqlRefused(Exception):
 class DbConfig:
     host: str = field(default_factory=lambda: os.getenv("DB_HOST", "127.0.0.1"))
     port: int = field(default_factory=lambda: int(os.getenv("DB_PORT", "3306")))
-    database: str = field(default_factory=lambda: os.getenv("DB_NAME", "harness"))
+    database: str = field(default_factory=lambda: os.getenv("DB_NAME", database_name()))
     user: str = field(default_factory=lambda: os.getenv("DB_USER", "harness_ro"))
     password: str = field(default_factory=lambda: os.getenv("DB_PASSWORD", "readonly"))
     timeout_s: int = field(default_factory=lambda: int(os.getenv("SQL_TIMEOUT_SECONDS", "15")))

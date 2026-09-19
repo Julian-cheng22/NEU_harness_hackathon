@@ -278,8 +278,8 @@ def _check_staleness(conn, p: ColumnProfile, cfg: DbConfig) -> None:
     # finding it. The generic checks above (type drift, duplicates, NULL
     # semantics, value domains) are schema-independent instrumentation and stay
     # on for everyone; only this dataset-specific lookup is gated.
-    from . import memory
-    if not memory.curated_hints_enabled():
+    from . import memory, dataset
+    if not memory.curated_hints_enabled() or dataset.name() != "saas":
         return
 
     # The `extra` predicate must use the alias `b` (the parent side), not the

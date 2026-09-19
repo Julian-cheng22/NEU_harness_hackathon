@@ -1,0 +1,233 @@
+meta:
+  dataset_version: milk-tea-1.0.0
+  grading: execution_match
+  compare: row_multiset
+  as_of: '2026-09-19'
+questions:
+- id: MTQ01
+  defect_ids:
+  - MT01
+  question: What is the approved sales quantity in base cups?
+  question_zh: 已审核销售数量合计多少杯（基本单位）？
+  answer_type: scalar
+  gold_sql: SELECT SUM(s.qty * CASE WHEN s.unit = 'box' THEN m.units_per_box ELSE 1 END) AS n FROM sales s JOIN
+    materials m USING(material_id) WHERE s.status='approved'
+  notes: ''
+  naive_sql: SELECT SUM(qty) AS n FROM sales WHERE status='approved'
+  expect: 121217.0
+- id: MTQ02
+  defect_ids:
+  - MT01
+  question: What is the posted stock-out quantity in base cups, including waste?
+  question_zh: 已过账库存出库（含报损）合计多少杯？
+  answer_type: scalar
+  gold_sql: SELECT SUM(o.qty * CASE WHEN o.unit = 'box' THEN m.units_per_box ELSE 1 END) AS n FROM stock_out o JOIN
+    materials m USING(material_id) WHERE o.status='posted'
+  notes: ''
+  naive_sql: SELECT SUM(qty) AS n FROM stock_out WHERE status='posted'
+  expect: 70308.0
+- id: MTQ03
+  defect_ids:
+  - MT02
+  question: How many distinct approved sales documents are there?
+  question_zh: 已审核销售单有多少张（按单号去重）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT order_code) AS n FROM sales WHERE status='approved'
+  notes: ''
+  naive_sql: SELECT COUNT(DISTINCT order_code) AS n FROM sales WHERE status<>'void'
+  expect: 1600
+- id: MTQ04
+  defect_ids:
+  - MT02
+  question: How many approved sales-return document lines are there?
+  question_zh: 已审核销售退货单有多少行？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) AS n FROM sales_returns WHERE status='C'
+  notes: Return ERP uses C=approved, A=draft. Sales uses approved/draft/void.
+  naive_sql: SELECT COUNT(*) AS n FROM sales_returns WHERE status='approved'
+  expect: 540
+- id: MTQ05
+  defect_ids:
+  - MT03
+  question: What is the approved refund total in CNY excluding tax, expressed as a positive amount?
+  question_zh: 已审核退货退款未税金额合计多少元（退款以正数表示）？
+  answer_type: scalar
+  gold_sql: SELECT SUM(ABS(refund_net)) AS n FROM sales_returns WHERE status='C'
+  notes: ''
+  naive_sql: SELECT SUM(refund_net) AS n FROM sales_returns WHERE status='C'
+  expect: 21957.0
+- id: MTQ06
+  defect_ids:
+  - MT03
+  question: How many base cups were returned on approved sales returns, expressed as a positive quantity?
+  question_zh: 已审核销售退货合计多少杯（退货数量以正数表示）？
+  answer_type: scalar
+  gold_sql: SELECT SUM(ABS(r.qty)*CASE WHEN r.unit='box' THEN m.units_per_box ELSE 1 END) AS n FROM sales_returns
+    r JOIN materials m USING(material_id) WHERE r.status='C'
+  notes: ''
+  naive_sql: SELECT SUM(r.qty*CASE WHEN r.unit='box' THEN m.units_per_box ELSE 1 END) AS n FROM sales_returns r
+    JOIN materials m USING(material_id) WHERE r.status='C'
+  expect: 2876.0
+- id: MTQ07
+  defect_ids:
+  - MT04
+  question: How many base cups physically entered inventory from posted purchases, counting each movement once?
+  question_zh: 已过账采购入库实际增加多少杯库存（每个业务流水只计一次）？
+  answer_type: scalar
+  gold_sql: "WITH unique_in AS (\n  SELECT i.*, ROW_NUMBER() OVER (PARTITION BY movement_key ORDER BY row_id) AS\
+    \ rn\n  FROM stock_in i\n) SELECT SUM(i.qty * CASE WHEN i.unit = 'box' THEN m.units_per_box ELSE 1 END) AS n\
+    \ FROM unique_in i JOIN materials m USING(material_id) WHERE rn=1 AND status='posted' AND source_type='purchase'"
+  notes: ''
+  naive_sql: SELECT SUM(i.qty * CASE WHEN i.unit = 'box' THEN m.units_per_box ELSE 1 END) AS n FROM stock_in i JOIN
+    materials m USING(material_id) WHERE status='posted' AND source_type='purchase'
+  expect: 5620000.0
+- id: MTQ08
+  defect_ids:
+  - MT04
+  question: How many extra stock-in export rows are replays of an existing movement?
+  question_zh: 库存入库导出表中有多少条重复导入的多余记录？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*)-COUNT(DISTINCT movement_key) AS n FROM stock_in
+  notes: ''
+  naive_sql: SELECT COUNT(*)-COUNT(DISTINCT row_id) AS n FROM stock_in
+  expect: 40
+- id: MTQ09
+  defect_ids:
+  - MT05
+  question: What is the tax-inclusive total value of approved sales orders in CNY?
+  question_zh: 已审核销售订单的价税合计是多少元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(line_tax_amount) AS n FROM sales WHERE status='approved'
+  notes: This is booked order value, not cash collected or accounting revenue. Two lines per order; header total
+    repeated.
+  naive_sql: SELECT SUM(order_total) AS n FROM sales WHERE status='approved'
+  expect: 994473.98
+- id: MTQ10
+  defect_ids:
+  - MT05
+  question: What is the largest approved sales order's tax-inclusive total in CNY? Return only the amount.
+  question_zh: 金额最大的已审核销售订单价税合计是多少元？只返回金额。
+  answer_type: scalar
+  gold_sql: SELECT MAX(order_total) AS n FROM sales WHERE status='approved'
+  notes: ''
+  naive_sql: SELECT SUM(order_total) AS n FROM sales WHERE status='approved' GROUP BY order_code ORDER BY n DESC
+    LIMIT 1
+  expect: 6194.64
+- id: MTQ11
+  defect_ids:
+  - MT06
+  question: How many base cups physically entered inventory from completed production? Count each physical receipt
+    once.
+  question_zh: 生产完成入库实际增加多少杯库存？每次实际入库只计一次。
+  answer_type: scalar
+  gold_sql: SELECT SUM(p.qty * CASE WHEN p.unit = 'box' THEN m.units_per_box ELSE 1 END) AS n FROM production_receipts
+    p JOIN materials m USING(material_id) WHERE status='completed'
+  notes: ''
+  naive_sql: SELECT SUM(n) AS n FROM (SELECT p.qty * CASE WHEN p.unit = 'box' THEN m.units_per_box ELSE 1 END AS
+    n FROM production_receipts p JOIN materials m USING(material_id) WHERE status='completed' UNION ALL SELECT i.qty
+    * CASE WHEN i.unit = 'box' THEN m.units_per_box ELSE 1 END AS n FROM stock_in i JOIN materials m USING(material_id)
+    WHERE status='posted' AND source_type='production') x
+  expect: 573200.0
+- id: MTQ12
+  defect_ids:
+  - MT06
+  question: What is the total physical inventory inflow in base cups from all posted sources, including production
+    and returns? Count each movement once.
+  question_zh: 所有已过账来源的实际入库合计多少杯（包括生产与退货，每个流水只计一次）？
+  answer_type: scalar
+  gold_sql: "WITH unique_in AS (\n  SELECT i.*, ROW_NUMBER() OVER (PARTITION BY movement_key ORDER BY row_id) AS\
+    \ rn\n  FROM stock_in i\n) SELECT SUM(i.qty * CASE WHEN i.unit = 'box' THEN m.units_per_box ELSE 1 END) AS n\
+    \ FROM unique_in i JOIN materials m USING(material_id) WHERE rn=1 AND status='posted'"
+  notes: ''
+  naive_sql: "WITH unique_in AS (\n  SELECT i.*, ROW_NUMBER() OVER (PARTITION BY movement_key ORDER BY row_id) AS\
+    \ rn\n  FROM stock_in i\n) SELECT SUM(n) AS n FROM (SELECT i.qty * CASE WHEN i.unit = 'box' THEN m.units_per_box\
+    \ ELSE 1 END AS n FROM unique_in i JOIN materials m USING(material_id) WHERE rn=1 AND status='posted' UNION\
+    \ ALL SELECT p.qty * CASE WHEN p.unit = 'box' THEN m.units_per_box ELSE 1 END AS n FROM production_receipts\
+    \ p JOIN materials m USING(material_id) WHERE status='completed') x"
+  expect: 6196076.0
+- id: MTQ13
+  defect_ids:
+  - MT07
+  question: What is the highest valid measured stock-out weight in kg across all export rows?
+  question_zh: 全部出库导出记录中，最高的有效实测重量是多少 kg？
+  answer_type: scalar
+  gold_sql: SELECT MAX(CAST(weight_text AS DECIMAL(18,4))) AS n FROM stock_out WHERE weight_text REGEXP '^[0-9]+([.][0-9]+)?$'
+  notes: ''
+  naive_sql: SELECT MAX(weight_text) AS n FROM stock_out
+  expect: 499.75
+- id: MTQ14
+  defect_ids:
+  - MT07
+  question: What is the average valid measured stock-out weight in kg across all export rows, excluding unavailable
+    readings? Round to 4 decimal places.
+  question_zh: 全部出库记录的有效实测重量平均多少 kg（排除不可用读数，保留四位小数）？
+  answer_type: scalar
+  gold_sql: SELECT ROUND(AVG(CAST(weight_text AS DECIMAL(18,4))),4) AS n FROM stock_out WHERE weight_text REGEXP
+    '^[0-9]+([.][0-9]+)?$'
+  notes: ''
+  naive_sql: SELECT ROUND(AVG(weight_text),4) AS n FROM stock_out
+  expect: 250.606
+- id: MTQ15
+  defect_ids:
+  - MT08
+  question: How many stock-in export rows are posted? This is a raw-row diagnostic; include replay rows.
+  question_zh: 入库导出表有多少行已过账记录？本题统计原始行，包含重复导入。
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) AS n FROM stock_in WHERE status='posted'
+  notes: ''
+  naive_sql: SELECT COUNT(*) AS n FROM stock_in WHERE posted_at IS NOT NULL
+  expect: 1997
+- id: MTQ16
+  defect_ids:
+  - MT08
+  question: How many stock-in export rows are not posted? This is a raw-row diagnostic; include replay rows.
+  question_zh: 入库导出表有多少行尚未过账？本题统计原始行，包含重复导入。
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) AS n FROM stock_in WHERE status<>'posted'
+  notes: ''
+  naive_sql: SELECT COUNT(*) AS n FROM stock_in WHERE posted_at IS NULL
+  expect: 203
+- id: MTQ17
+  defect_ids: []
+  question: How many material master records are there?
+  question_zh: 物料主数据有多少条？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) AS n FROM materials
+  notes: ''
+  expect: 20
+- id: MTQ18
+  defect_ids: []
+  question: How many warehouses are in the warehouse master?
+  question_zh: 仓库主数据有多少条？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) AS n FROM warehouses
+  notes: ''
+  expect: 4
+- id: MTQ19
+  defect_ids: []
+  question: How many customer stores are in the customer master?
+  question_zh: 客户门店主数据有多少条？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) AS n FROM customers
+  notes: ''
+  expect: 26
+- id: MTQ20
+  defect_ids:
+  - MT01
+  - MT02
+  - MT04
+  - MT06
+  question: As of 2026-09-19, what is inventory on hand in base cups across all warehouses? Opening inventory before
+    these documents was zero.
+  question_zh: 截至2026-09-19，全部仓库共有多少杯库存？单据之前期初库存为零。
+  answer_type: scalar
+  gold_sql: "WITH unique_in AS (\n  SELECT i.*, ROW_NUMBER() OVER (PARTITION BY movement_key ORDER BY row_id) AS\
+    \ rn\n  FROM stock_in i\n) SELECT (SELECT SUM(i.qty * CASE WHEN i.unit = 'box' THEN m.units_per_box ELSE 1 END)\
+    \ FROM unique_in i JOIN materials m USING(material_id) WHERE rn=1 AND status='posted') - (SELECT SUM(o.qty *\
+    \ CASE WHEN o.unit = 'box' THEN m.units_per_box ELSE 1 END) FROM stock_out o JOIN materials m USING(material_id)\
+    \ WHERE status='posted') AS n"
+  notes: Physical stock ledger only; sales orders are reservations and do not move inventory. Return and production
+    stock-in mirrors must not be counted twice.
+  naive_sql: SELECT (SELECT SUM(qty) FROM stock_in)+(SELECT SUM(qty) FROM production_receipts)-(SELECT SUM(qty)
+    FROM stock_out) AS n
+  expect: 6125768.0

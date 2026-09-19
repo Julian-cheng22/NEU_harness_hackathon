@@ -32,15 +32,15 @@ sys.path.insert(0, str(ROOT))
 load_dotenv(ROOT / ".env")
 
 from eval.grade import explain_mismatch, matches  # noqa: E402
-from harness import agent, schema_card  # noqa: E402
+from harness import agent, schema_card, dataset  # noqa: E402
 from harness.db import DbConfig, connect  # noqa: E402
 from harness.memory import knowledge_mode  # noqa: E402
 
-OUT_DIR = ROOT / "eval" / "out"
+OUT_DIR = dataset.results_dir()
 
 
 def load_questions(limit: int | None = None, only: str | None = None) -> list[dict]:
-    spec = yaml.safe_load((ROOT / "data" / "questions.yaml").read_text(encoding="utf-8"))
+    spec = yaml.safe_load((dataset.data_dir() / "questions.yaml").read_text(encoding="utf-8"))
     qs = spec["questions"]
     if only:
         wanted = {s.strip().upper() for s in only.split(",")}
@@ -185,7 +185,7 @@ def main() -> int:
 
         path = OUT_DIR / f"{arm}-{provider}{'-' + args.tag if args.tag else ''}.json"
         path.write_text(json.dumps(
-            {"arm": arm, "provider": provider,
+            {"arm": arm, "provider": provider, "dataset": dataset.name(),
              # Recorded because the harness arm's result is meaningless without
              # it: the same code scores differently depending on whether its
              # business knowledge was hand-written or discovered.
@@ -200,7 +200,7 @@ def main() -> int:
         print(f"\nLIFT: {b*100:.1f}% -> {h*100:.1f}%  "
               f"({(h-b)*100:+.1f} points)")
         print("\nRender the per-defect breakdown with:  python eval/report.py")
-    return 0
+    return 1 if args.arm == "dry" and any(s["correct"] != s["total"] for s in summaries.values()) else 0
 
 
 if __name__ == "__main__":

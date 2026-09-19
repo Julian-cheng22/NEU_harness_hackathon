@@ -63,7 +63,9 @@ VALID_DECISIONS = ("pending", "approved", "rejected", "edited")
 
 
 def artifact_path() -> Path:
-    return Path(os.getenv("HARNESS_ARTIFACT", str(DEFAULT_ARTIFACT)))
+    from . import dataset
+    default = DEFAULT_ARTIFACT if dataset.name() == "saas" else dataset.data_dir() / "learned_schema.yaml"
+    return Path(os.getenv("HARNESS_ARTIFACT", str(default)))
 
 
 def knowledge_mode() -> str:
@@ -220,7 +222,8 @@ def dataset_version() -> str:
     data/generate.py pulls in the whole generation stack; this only needs one
     string, and an import cycle through the data layer is not worth it.
     """
-    gen = ROOT / "data" / "generate.py"
+    from . import dataset
+    gen = dataset.data_dir() / "generate.py"
     try:
         for line in gen.read_text(encoding="utf-8").splitlines():
             if line.startswith("DATASET_VERSION"):
