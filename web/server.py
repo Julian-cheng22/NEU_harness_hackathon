@@ -129,11 +129,13 @@ def api_health() -> dict[str, Any]:
             ok, msg = client.health()
             llm.update(ok=ok, detail=msg)
         else:
-            # Gemini has no cheap health probe -- a real call costs quota, so
+            # No cheap probe for this backend -- a real call costs quota, so
             # report "configured" and let the first question be the test.
             llm.update(ok=True, detail=f"{provider} configured (not probed)")
     except Exception as e:
-        llm["detail"] = f"{type(e).__name__}: {e}"
+        # A frozen provider surfaces here: from_env() raises before any network
+        # call, and the banner should say WHY rather than "failed to fetch".
+        llm["detail"] = friendly_error(f"{type(e).__name__}: {e}") or ""
 
     return {"db": db, "llm": llm, "live_ready": db["ok"] and llm["ok"]}
 
@@ -216,6 +218,10 @@ def friendly_error(msg: str | None) -> str | None:
     model = os.getenv("GEMINI_MODEL", "the model")
     low = msg.lower()
 
+    if "frozen" in low and "gemini" in low:
+        return ("The Gemini backend is frozen (Google API policy change). "
+                "Set HARNESS_LLM=local in .env and start llama-server, or use "
+                "HARNESS_LLM=anthropic.")
     if "resource_exhausted" in low or "429" in msg:
         if "perday" in msg.replace(" ", "").lower():
             return (f"Daily free-tier quota for {model} is used up. It resets at "

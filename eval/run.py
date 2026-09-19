@@ -167,7 +167,7 @@ def main() -> int:
             print(f"LLM: {msg}")
             if not ok:
                 print("Refusing to start: the model is unreachable. Start "
-                      "llama-server, or set HARNESS_LLM=gemini.", file=sys.stderr)
+                      "llama-server, or set HARNESS_LLM=anthropic.", file=sys.stderr)
                 return 1
 
     arms = ["baseline", "harness"] if args.arm == "both" else [args.arm]
