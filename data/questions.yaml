@@ -251,26 +251,153 @@ questions:
     question: How many distinct companies are in the customer table? Companies appear under more than one record.
     answer_type: scalar
     gold_sql: |
-      SELECT COUNT(DISTINCT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', ''))) AS n
+      -- Strip known corporate suffixes BEFORE stripping punctuation, or the
+      -- suffix's own letters (inc/llc/...) survive and the duplicate never
+      -- collapses to the same key.
+      SELECT COUNT(DISTINCT
+        TRIM(REGEXP_REPLACE(LOWER(company_name), ',? *(inc\\.?|incorporated|llc|ltd\\.?)$', ''))
+      ) AS n
       FROM customers;
     naive_sql: |
       SELECT COUNT(*) FROM customers;          -- counts duplicate records
     notes: >
       The same organisation exists under multiple customer_ids with name
-      variants like 'Acme' vs 'Acme, Inc.'.
+      variants like 'Acme Systems' vs 'Acme Systems, Inc.'. A normalization
+      that only strips punctuation (not the suffix itself) still fails to
+      merge these -- the suffix's letters survive and the keys stay distinct.
 
   - id: Q15
     defect_ids: [D6]
-    question: Which company names appear more than once after normalizing case and punctuation? Return the normalized name and how many records it has.
+    question: Which company names appear more than once after normalizing case, punctuation, and common corporate suffixes (Inc/LLC/Ltd/Incorporated)? Return the normalized name and how many records it has.
     answer_type: table
     gold_sql: |
       SELECT norm, COUNT(*) AS n FROM (
-        SELECT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', '')) AS norm
+        SELECT TRIM(REGEXP_REPLACE(LOWER(company_name), ',? *(inc\\.?|incorporated|llc|ltd\\.?)$', '')) AS norm
         FROM customers
       ) t
       GROUP BY norm
       HAVING COUNT(*) > 1
       ORDER BY n DESC, norm ASC;
+    naive_sql: |
+      -- Punctuation-only normalization: the suffix's letters remain, so no
+      -- pair ever collides and this returns an empty result set.
+      SELECT norm, COUNT(*) AS n FROM (
+        SELECT LOWER(REGEXP_REPLACE(company_name, '[^a-zA-Z0-9]', '')) AS norm
+        FROM customers
+      ) t
+      GROUP BY norm
+      HAVING COUNT(*) > 1;
+
+  - id: Q26
+    defect_ids: [D6]
+    question: How many distinct companies have won at least one deal? A company may hold more than one customer record.
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(DISTINCT
+        TRIM(REGEXP_REPLACE(LOWER(c.company_name), ',? *(inc\\.?|incorporated|llc|ltd\\.?)$', ''))
+      ) AS n
+      FROM deals d
+      JOIN customers c ON c.customer_id = d.acct_id
+      WHERE d.status = 'won';
+    naive_sql: |
+      -- deals.acct_id is a customer_id, not a company. If both of a
+      -- duplicate pair's customer_ids each won a deal, this counts one
+      -- company twice.
+      SELECT COUNT(DISTINCT acct_id) FROM deals WHERE status = 'won';
+    notes: >
+      Combines D1 (acct_id is the join key) with D6 (acct_id is not the same
+      thing as "company"). Distinct customer_id and distinct company can
+      legitimately differ once duplicate entities are involved.
+
+  - id: Q27
+    defect_ids: [D6]
+    question: Which company (merging duplicate customer records for the same organisation) has filed the most support tickets? Return the normalized company name and the ticket count.
+    answer_type: table
+    gold_sql: |
+      SELECT norm, COUNT(*) AS n_tickets FROM (
+        SELECT TRIM(REGEXP_REPLACE(LOWER(c.company_name), ',? *(inc\\.?|incorporated|llc|ltd\\.?)$', '')) AS norm
+        FROM support_tickets t
+        JOIN customers c ON c.customer_id = t.cust_id
+      ) x
+      GROUP BY norm
+      ORDER BY n_tickets DESC, norm ASC
+      LIMIT 1;
+    naive_sql: |
+      -- Grouping by cust_id (or by the raw, unmerged company_name) can split
+      -- one company's ticket volume across two rows, so neither row alone
+      -- looks like the busiest customer.
+      SELECT t.cust_id, COUNT(*) AS n
+      FROM support_tickets t
+      GROUP BY t.cust_id
+      ORDER BY n DESC
+      LIMIT 1;
+    notes: >
+      support_tickets are generated independently per customer_id, so a
+      duplicated company's ticket count is split across both of its ids.
+      Whoever tops the leaderboard when merged may not be whoever tops it
+      per-id.
+
+  - id: Q28
+    defect_ids: [D6, D10]
+    question: Which company (merging duplicate customer records) has the highest total invoiced revenue in US dollars? Return the normalized company name and the total.
+    answer_type: table
+    gold_sql: |
+      SELECT norm, ROUND(SUM(usd), 2) AS revenue_usd FROM (
+        SELECT
+          TRIM(REGEXP_REPLACE(LOWER(c.company_name), ',? *(inc\\.?|incorporated|llc|ltd\\.?)$', '')) AS norm,
+          CASE
+            WHEN i.currency_minor = 1 THEN i.amount / 100
+            WHEN i.currency_minor = 0 THEN i.amount
+            WHEN i.issued_at < '2025-07-01' THEN i.amount / 100
+            ELSE i.amount
+          END AS usd
+        FROM invoices i
+        JOIN customers c ON c.customer_id = i.cust_id
+        WHERE i.status <> 'void'
+      ) t
+      GROUP BY norm
+      ORDER BY revenue_usd DESC
+      LIMIT 1;
+    naive_sql: |
+      -- Two compounding errors: grouping by the raw (unmerged) customer_id
+      -- instead of company, and summing amount without normalizing cents vs
+      -- dollars. Either one alone can knock the true top company out of
+      -- first place.
+      SELECT cust_id, SUM(amount) AS revenue
+      FROM invoices
+      WHERE status <> 'void'
+      GROUP BY cust_id
+      ORDER BY revenue DESC
+      LIMIT 1;
+    notes: >
+      Requires both entity merging (D6) and unit normalization (D10) in the
+      same query -- a company whose true revenue is highest can lose the
+      "highest" ranking if its revenue is split across two customer_ids, or
+      if one biller's rows are left in cents.
+
+  - id: Q29
+    defect_ids: [D6]
+    question: How many distinct companies currently have at least one active subscription? A company may hold more than one customer record.
+    answer_type: scalar
+    gold_sql: |
+      SELECT COUNT(DISTINCT
+        TRIM(REGEXP_REPLACE(LOWER(c.company_name), ',? *(inc\\.?|incorporated|llc|ltd\\.?)$', ''))
+      ) AS n
+      FROM subscriptions s
+      JOIN customers c ON c.customer_id = s.customer_id
+      WHERE s.status = 'active';
+    naive_sql: |
+      -- Each customer_id gets its own independently-generated subscription,
+      -- so a duplicated company can have TWO active subscriptions under two
+      -- different ids. Counting distinct customer_id overstates the number
+      -- of actual client companies.
+      SELECT COUNT(DISTINCT customer_id) AS n
+      FROM subscriptions
+      WHERE status = 'active';
+    notes: >
+      This is the quietest version of D6: nothing errors, nothing returns
+      zero rows, the number is just too high by however many duplicate pairs
+      both happen to be active at once.
 
   # -------------------------------------------------------------------------
   # D7 -- mixed timezones, no timezone column
