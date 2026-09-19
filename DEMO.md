@@ -61,9 +61,9 @@ designed behaviour, not a failure.
 Leave it running in its own terminal. The page now fetches `/api/results` live,
 so a re-run of `eval/run.py` shows up on refresh without re-baking `data.js`.
 
-Bind to localhost. `--host 0.0.0.0` exists for demoing off a second laptop and
-prints a warning when used — this server runs model-written SQL and has no
-authentication.
+Bind to localhost for a single-laptop demo. To share on trusted Wi-Fi, use
+`--host 0.0.0.0 --password-prompt` and follow [WIFI_SHARING.md](WIFI_SHARING.md).
+Network sharing requires a password; HTTP does not encrypt it.
 
 ---
 

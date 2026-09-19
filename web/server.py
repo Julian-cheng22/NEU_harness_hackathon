@@ -22,15 +22,16 @@ look better and measure worse: one llama-server on one GPU serialises the
 requests anyway, so the latencies shown would be queueing artefacts rather than
 the numbers we are claiming.
 
-BINDING: 127.0.0.1 by default. This server executes model-written SQL and
-exposes the LLM provider; it has no authentication and must not be put on a
-network interface. `--host 0.0.0.0` is available for demoing off a second
-laptop and prints a warning when used.
+BINDING: 127.0.0.1 by default. For a trusted-Wi-Fi demo, use
+`--host 0.0.0.0 --password-prompt`. Network binding requires a password.
+The browser login is `teammate`; the password protects the page and all APIs.
+HTTP does not encrypt credentials; use HTTPS on an untrusted network.
 """
 
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import queue
@@ -54,11 +55,13 @@ load_dotenv(ROOT / ".env")
 from eval.grade import matches  # noqa: E402
 from harness import agent, schema_card  # noqa: E402
 from harness.db import DbConfig, list_tables  # noqa: E402
+from web.auth import DashboardPassword  # noqa: E402
 
 STATIC = Path(__file__).resolve().parent / "static"
 OUT_DIR = ROOT / "eval" / "out"
 
 app = FastAPI(title="Harness dashboard", docs_url=None, redoc_url=None)
+app.add_middleware(DashboardPassword)
 
 
 # ---------------------------------------------------------------------------
@@ -341,15 +344,35 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--password-prompt", action="store_true",
+                    help="Ask for a temporary password without saving it to disk")
     args = ap.parse_args()
 
-    if args.host not in ("127.0.0.1", "localhost"):
-        print(f"WARNING: binding {args.host} exposes an UNAUTHENTICATED endpoint "
-              f"that runs model-written SQL. Localhost only unless you mean it.",
-              file=sys.stderr)
+    if args.password_prompt:
+        password = getpass.getpass("Temporary dashboard password (at least 12 characters): ")
+        if len(password) < 12:
+            ap.error("Choose a password with at least 12 characters.")
+        if password != getpass.getpass("Confirm password: "):
+            ap.error("Passwords did not match.")
+        os.environ["DASHBOARD_PASSWORD"] = password
+
+    shared = args.host not in ("127.0.0.1", "localhost", "::1")
+    if shared and len(os.getenv("DASHBOARD_PASSWORD", "")) < 12:
+        ap.error("Network sharing requires a password of at least 12 characters. "
+                 "Add --password-prompt or set DASHBOARD_PASSWORD.")
+    if os.getenv("DASHBOARD_PASSWORD"):
+        print("Browser login: teammate / the password you configured.")
+    if shared:
+        print("Trusted LAN only: HTTP does not encrypt the password or questions.")
 
     import uvicorn
-    print(f"\n  Dashboard + live demo:  http://{args.host}:{args.port}\n")
+    if args.host == "0.0.0.0":
+        print(f"\n  On this laptop: http://127.0.0.1:{args.port}")
+        print(f"  On your teammate's laptop: http://<your Wi-Fi IPv4 address>:{args.port}")
+        print("  Find the Wi-Fi IPv4 address with ipconfig; do not browse to 0.0.0.0.\n")
+    else:
+        url_host = f"[{args.host}]" if ":" in args.host else args.host
+        print(f"\n  Dashboard + live demo:  http://{url_host}:{args.port}\n")
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
 

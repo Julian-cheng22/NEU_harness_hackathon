@@ -273,11 +273,12 @@ copy will quietly show yesterday's numbers.
 
 ### Security note
 
-`web/server.py` binds `127.0.0.1` and has **no authentication**. It executes
-model-written SQL and exposes whichever LLM provider is configured. `--host
-0.0.0.0` exists for demoing off a second laptop and prints a warning; do not
-leave it on a network you do not control. The read-only MySQL grant is still the
-layer doing the real enforcing.
+`web/server.py` binds `127.0.0.1` by default. To share on trusted Wi-Fi, use
+`--host 0.0.0.0 --password-prompt`; network binding requires a password of at
+least 12 characters. The browser username is `teammate`, and the password protects
+the page and every API route. See **[WIFI_SHARING.md](WIFI_SHARING.md)** for address,
+firewall, and teardown instructions. HTTP does not encrypt credentials; use HTTPS
+on untrusted networks. The read-only MySQL grant still enforces database access.
 
 ---
 
