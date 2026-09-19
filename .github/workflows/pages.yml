@@ -1,0 +1,76 @@
+# Publish the dashboard to GitHub Pages.
+#
+# What goes up is web/static/ exactly as committed -- four files, no build step.
+# The page renders from web/static/data.js, which is baked by
+# `python -m web.build_data` and committed on purpose, so the dashboard works
+# with no server, no database and no model.
+#
+# Why this workflow does NOT run build_data:
+#   web/build_data.py imports web/server.py, which imports the whole model stack
+#   (pymysql, sqlglot, google-genai, anthropic, fastapi). Rebuilding here would
+#   make the public URL depend on all of it -- so an unrelated SDK change could
+#   take the results page down. The dashboard's whole design point is that the
+#   measured numbers do not depend on anything being up. Publishing them should
+#   not either.
+#
+# The cost of that choice is that a forgotten re-bake would silently publish
+# yesterday's numbers, so the deploy is gated on scripts/check_dashboard_data.py,
+# which compares the committed data.js against the committed eval results and
+# needs only PyYAML.
+#
+# The live "Ask it live" panel is inert here by design: it needs a seeded MySQL
+# container and a local llama-server. /api/health 404s on Pages, and the page
+# shows its "no server" state. See TRY_IT.md.
+
+name: Publish dashboard
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time. Cancel a superseded run rather than racing it, but never
+# cancel one mid-deploy -- a half-published site is worse than a stale one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Check data.js is current
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Just the YAML parser. Emphatically not requirements.txt -- see above.
+      - run: pip install PyYAML==6.0.2
+
+      - run: python scripts/check_dashboard_data.py
+
+  deploy:
+    name: Deploy to Pages
+    needs: verify
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/static
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
