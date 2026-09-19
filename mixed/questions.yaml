@@ -1,0 +1,232 @@
+# 30 questions: Q01-Q25 defect-focused (5 per industry), C01-C05 controls (1 per industry). Gold answers verified against MySQL for dataset v1.0.0.
+questions:
+- id: Q01
+  defect_ids:
+  - D1
+  question: 【医疗】2023 年 12 月有多少位不同的患者被开过处方？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT pat_id) FROM med_prescriptions WHERE start_time >= '2023-12-01' AND start_time < '2024-01-01'
+  naive_sql: SELECT COUNT(DISTINCT subject_id) FROM med_prescriptions WHERE start_time >= '2023-12-01' AND start_time < '2024-01-01'
+  notes: 领域：医疗；来源：medical 数据集 Q01
+- id: Q02
+  defect_ids:
+  - D4
+  question: 【医疗】目前仍在住院的患者有多少？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM med_admissions WHERE dischtime IS NULL AND discharge_location <> 'DIED'
+  naive_sql: SELECT COUNT(*) FROM med_admissions WHERE dischtime IS NULL
+  notes: 领域：医疗；来源：medical 数据集 Q04
+- id: Q03
+  defect_ids:
+  - D5
+  question: 【医疗】血肌酐（Creatinine）的平均值是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(value AS DECIMAL(10,3))) FROM med_lab_events e JOIN med_lab_items i USING (itemid) WHERE i.label = 'Creatinine' AND value REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(value) FROM med_lab_events e JOIN med_lab_items i USING (itemid) WHERE i.label = 'Creatinine'
+  notes: 领域：医疗；来源：medical 数据集 Q05
+- id: Q04
+  defect_ids:
+  - D7
+  question: 【医疗】2023-12-12（本地日期）当天完成了多少项化验？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM med_lab_events WHERE DATE(DATE_SUB(charttime, INTERVAL IF(source='LIS_BATCH',5,0) HOUR)) = '2023-12-12'
+  naive_sql: SELECT COUNT(*) FROM med_lab_events WHERE DATE(charttime) = '2023-12-12'
+  notes: 领域：医疗；来源：medical 数据集 Q07
+- id: Q05
+  defect_ids:
+  - D10
+  question: 【医疗】血糖（Glucose）平均值是多少（统一为 mg/dL）？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CASE WHEN e.uom='mmol/L' THEN e.valuenum*18.016 ELSE e.valuenum END) FROM med_lab_events e JOIN med_lab_items i USING (itemid) WHERE i.label='Glucose'
+  naive_sql: SELECT AVG(valuenum) FROM med_lab_events e JOIN med_lab_items i USING (itemid) WHERE i.label='Glucose'
+  notes: 领域：医疗；来源：medical 数据集 Q10
+- id: Q06
+  defect_ids:
+  - D2
+  question: 【法律】已结案（CLOSED）的案件有多少件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM leg_cases WHERE status = 'CLOSED'
+  naive_sql: SELECT COUNT(*) FROM leg_cases WHERE status = 'paid'
+  notes: 领域：法律；来源：legal 数据集 Q04。模型把 fee_invoices 的取值套到 cases 上
+- id: Q07
+  defect_ids:
+  - D3
+  question: 【法律】docket 文件数最多的前 5 个案件是哪些？（只统计确实存在的案件；同数按案件号升序）
+  answer_type: table
+  gold_sql: SELECT c.case_id FROM leg_cases c JOIN leg_docket_entries d ON d.case_no = c.case_id GROUP BY c.case_id ORDER BY COUNT(*) DESC, c.case_id LIMIT 5
+  naive_sql: SELECT case_id FROM leg_cases ORDER BY num_filings DESC, case_id LIMIT 5
+  notes: 领域：法律；来源：legal 数据集 Q06。cases.num_filings 是过期缓存
+- id: Q08
+  defect_ids:
+  - D6
+  question: 【法律】系统里一共有多少家不同的公司当事人？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM (SELECT name, state FROM leg_parties WHERE party_type = 'corporation' GROUP BY name, state) t
+  naive_sql: SELECT COUNT(*) FROM leg_parties WHERE party_type = 'corporation'
+  notes: 领域：法律；来源：legal 数据集 Q13
+- id: Q09
+  defect_ids:
+  - D8
+  question: 【法律】有多少条 docket 记录找不到对应的案件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM leg_docket_entries d LEFT JOIN leg_cases c ON c.case_id = d.case_no WHERE c.case_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM leg_docket_entries d JOIN leg_cases c ON c.case_id = d.case_no WHERE c.case_id IS NULL
+  notes: 领域：法律；来源：legal 数据集 Q19
+- id: Q10
+  defect_ids:
+  - D9
+  question: 【法律】按结案代码（disposition_code）统计各代码的案件数（不含未结案）。
+  answer_type: table
+  gold_sql: SELECT disposition_code, COUNT(*) FROM leg_cases WHERE disposition_code IS NOT NULL GROUP BY disposition_code
+  naive_sql: SELECT disposition_code, COUNT(*) FROM leg_cases WHERE disposition_code BETWEEN 1 AND 4 GROUP BY disposition_code
+  notes: 领域：法律；来源：legal 数据集 Q20。只信文档 1-4，漏掉 5-9
+- id: Q11
+  defect_ids:
+  - D1
+  question: 【电商】有多少个订单已经有发货记录？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT o.order_id) FROM ecom_orders o JOIN ecom_shipments s ON s.order_ref = o.order_id
+  naive_sql: SELECT COUNT(DISTINCT o.order_id) FROM ecom_orders o JOIN ecom_shipments s ON s.order_id = o.order_id
+  notes: 领域：电商；来源：ecommerce 数据集 Q03
+- id: Q12
+  defect_ids:
+  - D4
+  question: 【电商】目前仍在运输中（未送达且未丢失）的包裹有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM ecom_shipments WHERE status = 'IN_TRANSIT'
+  naive_sql: SELECT COUNT(*) FROM ecom_shipments WHERE delivered_at IS NULL
+  notes: 领域：电商；来源：ecommerce 数据集 Q08。丢失包裹的 delivered_at 也为空
+- id: Q13
+  defect_ids:
+  - D5
+  question: 【电商】最重的商品重量是多少千克？
+  answer_type: scalar
+  gold_sql: SELECT MAX(CAST(weight_kg AS DECIMAL(6,2))) FROM ecom_products WHERE weight_kg REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT MAX(weight_kg) FROM ecom_products
+  notes: 领域：电商；来源：ecommerce 数据集 Q12。文本比较：'9.9' 大于 '13.5'
+- id: Q14
+  defect_ids:
+  - D8
+  question: 【电商】有多少个订单找不到对应的客户？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM ecom_orders o LEFT JOIN ecom_customers c ON c.customer_id = o.customer_id WHERE c.customer_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM ecom_orders o JOIN ecom_customers c ON c.customer_id = o.customer_id WHERE c.customer_id IS NULL
+  notes: 领域：电商；来源：ecommerce 数据集 Q19
+- id: Q15
+  defect_ids:
+  - D10
+  question: 【电商】已扣款（captured）支付的总金额是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN gateway = 'LEGACY' THEN amount / 100 ELSE amount END) FROM ecom_payments WHERE status = 'captured'
+  naive_sql: SELECT SUM(amount) FROM ecom_payments WHERE status = 'captured'
+  notes: 领域：电商；来源：ecommerce 数据集 Q22
+- id: Q16
+  defect_ids:
+  - D2
+  question: 【短视频】生效中（active）的推广有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM tt_promotions WHERE status = 'active'
+  naive_sql: SELECT COUNT(*) FROM tt_promotions WHERE status = 'PUBLISHED'
+  notes: 领域：短视频；来源：tiktok 数据集 Q05
+- id: Q17
+  defect_ids:
+  - D3
+  question: 【短视频】实际点赞数最多的前 10 个视频是哪些？（只统计现存视频；同数按视频 ID 升序）
+  answer_type: table
+  gold_sql: SELECT v.video_id FROM tt_videos v JOIN tt_likes l ON l.video_id = v.video_id GROUP BY v.video_id ORDER BY COUNT(*) DESC, v.video_id LIMIT 10
+  naive_sql: SELECT video_id FROM tt_videos ORDER BY like_count DESC, video_id LIMIT 10
+  notes: 领域：短视频；来源：tiktok 数据集 Q06。videos.like_count 是过期缓存
+- id: Q18
+  defect_ids:
+  - D6
+  question: 【短视频】一共有多少位不同的真人用户？（同一 device_id 视为同一人）
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT device_id) FROM tt_users
+  naive_sql: SELECT COUNT(*) FROM tt_users
+  notes: 领域：短视频；来源：tiktok 数据集 Q13
+- id: Q19
+  defect_ids:
+  - D9
+  question: 【短视频】按举报原因代码（reason_code）统计各代码的举报数。
+  answer_type: table
+  gold_sql: SELECT reason_code, COUNT(*) FROM tt_reports GROUP BY reason_code
+  naive_sql: SELECT reason_code, COUNT(*) FROM tt_reports WHERE reason_code BETWEEN 1 AND 4 GROUP BY reason_code
+  notes: 领域：短视频；来源：tiktok 数据集 Q20。只信文档 1-4，漏掉 5-9
+- id: Q20
+  defect_ids:
+  - D10
+  question: 【短视频】平均每个推广的预算是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CASE WHEN billing_system = 'LEGACY' THEN budget / 100 ELSE budget END) FROM tt_promotions
+  naive_sql: SELECT AVG(budget) FROM tt_promotions
+  notes: 领域：短视频；来源：tiktok 数据集 Q23
+- id: Q21
+  defect_ids:
+  - D1
+  question: 【地图】有多少个不同的地点被用户举报过？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT p.place_id) FROM map_places p JOIN map_flags f ON f.listing_id = p.place_id
+  naive_sql: SELECT COUNT(DISTINCT p.place_id) FROM map_places p JOIN map_flags f ON f.place_id = p.place_id
+  notes: 领域：地图；来源：maps 数据集 Q03
+- id: Q22
+  defect_ids:
+  - D4
+  question: 【地图】目前正常营业（OPEN）的地点有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM map_places WHERE status = 'OPEN'
+  naive_sql: SELECT COUNT(*) FROM map_places WHERE closed_date IS NULL
+  notes: 领域：地图；来源：maps 数据集 Q08。暂停营业和缺关闭日期的永久关闭地点 closed_date 也为空
+- id: Q23
+  defect_ids:
+  - D5
+  question: 【地图】所有评价的平均评分是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(rating AS DECIMAL(4,2))) FROM map_reviews WHERE rating REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(rating) FROM map_reviews
+  notes: 领域：地图；来源：maps 数据集 Q10
+- id: Q24
+  defect_ids:
+  - D7
+  question: 【地图】2024-12-29（本地日期）当天有多少条评价？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM map_reviews WHERE DATE(DATE_SUB(created_at, INTERVAL IF(source='MOBILE',5,0) HOUR)) = '2024-12-29'
+  naive_sql: SELECT COUNT(*) FROM map_reviews WHERE DATE(created_at) = '2024-12-29'
+  notes: 领域：地图；来源：maps 数据集 Q16
+- id: Q25
+  defect_ids:
+  - D8
+  question: 【地图】有多少条评价找不到对应的地点？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM map_reviews r LEFT JOIN map_places p ON p.place_id = r.place_ref WHERE p.place_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM map_reviews r JOIN map_places p ON p.place_id = r.place_ref WHERE p.place_id IS NULL
+  notes: 领域：地图；来源：maps 数据集 Q19
+- id: C01
+  defect_ids: []
+  question: 【医疗】一共有多少个科室？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM med_departments
+  notes: 领域：医疗；来源：medical 数据集 C02
+- id: C02
+  defect_ids: []
+  question: 【法律】劳动争议（employment）类型的案件有多少件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM leg_cases WHERE case_type = 'employment'
+  notes: 领域：法律；来源：legal 数据集 C04
+- id: C03
+  defect_ids: []
+  question: 【电商】一共有多少个仓库？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM ecom_warehouses
+  notes: 领域：电商；来源：ecommerce 数据集 C01
+- id: C04
+  defect_ids: []
+  question: 【短视频】一共有多少位创作者？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM tt_creators
+  notes: 领域：短视频；来源：tiktok 数据集 C01
+- id: C05
+  defect_ids: []
+  question: 【地图】一共有多少位商家（owners）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM map_owners
+  notes: 领域：地图；来源：maps 数据集 C03

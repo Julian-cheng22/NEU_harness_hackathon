@@ -1,0 +1,154 @@
+# Defect contract for the condensed five-industry dataset. Each defect combines the instances used by the 25 defect questions; detect_sql returns n > 0 when the defect is present.
+defects:
+- id: D1
+  title: 同一概念的字段命名不一致
+  tables:
+  - med_admissions
+  - med_prescriptions
+  - ecom_customers
+  - ecom_orders
+  - ecom_shipments
+  - map_places
+  - map_reviews
+  - map_flags
+  columns:
+  - med_prescriptions.pat_id
+  - ecom_orders.order_id
+  - ecom_shipments.order_ref
+  - map_reviews.place_ref
+  - map_flags.listing_id
+  - map_places.place_id
+  naive_failure: '[医疗] 模型假设所有表都用 subject_id，join prescriptions 时列不存在或猜错。 [电商] 模型假设所有表都用 customer_id / order_id，join reviews、returns、shipments 时列不存在或猜错。 [地图] 模型假设所有表都用 place_id，join reviews、photos、flags 时列不存在或猜错。'
+  harness_tool: infer_joins
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'med_prescriptions' AND column_name = 'pat_id') + (SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'ecom_shipments' AND column_name = 'order_ref') + (SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND ((table_name = 'map_reviews' AND column_name = 'place_ref') OR (table_name = 'map_flags' AND column_name = 'listing_id'))) AS n
+- id: D2
+  title: 同名列，取值域不同
+  tables:
+  - leg_cases
+  - leg_fee_invoices
+  - tt_videos
+  - tt_promotions
+  columns:
+  - leg_cases.status
+  - leg_fee_invoices.status
+  - tt_videos.status
+  - tt_promotions.status
+  naive_failure: '[法律] 从 fee_invoices 学到 status=''paid''，套到 cases 上返回 0 行（cases 用 OPEN/CLOSED/APPEALED）。 [短视频] 从 promotions 学到 status=''active''，套到 videos 上返回 0 行（videos 用 PUBLISHED/PRIVATE/REMOVED）。'
+  harness_tool: profile_column
+  detect_sql: SELECT (SELECT COUNT(DISTINCT status) AS n FROM leg_cases WHERE status NOT IN (SELECT DISTINCT status FROM leg_fee_invoices)) + (SELECT COUNT(DISTINCT status) AS n FROM tt_videos WHERE status NOT IN (SELECT DISTINCT status FROM tt_promotions)) AS n
+- id: D3
+  title: 冗余列与真实来源不一致（过期缓存）
+  tables:
+  - leg_cases
+  - leg_docket_entries
+  - tt_videos
+  - tt_likes
+  - tt_creators
+  columns:
+  - leg_cases.num_filings
+  - tt_videos.like_count
+  - tt_creators.follower_count
+  naive_failure: '[法律] 模型直接读 cases.num_filings 统计文件数，结果与 docket_entries 实际计数不符。 [短视频] 模型直接读 videos.like_count 或 creators.follower_count，结果与 likes / follows 实际数据不符。'
+  harness_tool: profile_column
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM leg_cases c WHERE c.num_filings <> (SELECT COUNT(*) FROM leg_docket_entries d WHERE d.case_no = c.case_id)) + (SELECT COUNT(*) AS n FROM tt_videos v WHERE v.like_count <> (SELECT COUNT(*) FROM tt_likes l WHERE l.video_id = v.video_id)) AS n
+- id: D4
+  title: NULL 含两种互不兼容的含义
+  tables:
+  - med_admissions
+  - ecom_shipments
+  - map_places
+  columns:
+  - med_admissions.dischtime
+  - ecom_shipments.delivered_at
+  - map_places.closed_date
+  naive_failure: '[医疗] 模型认为 dischtime IS NULL 就是"仍在住院"，实际部分是数据缺失（已死亡转院），在院人数被高估。 [电商] 模型认为 delivered_at IS NULL 就是仍在运输中，实际部分包裹已丢失（LOST），在途数被高估。 [地图] 模型认为 closed_date IS NULL 就是仍在营业，实际有永久关闭的地点没有记录关闭日期，还有暂停营业的地点，营业数被高估。'
+  harness_tool: profile_column
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM med_admissions WHERE dischtime IS NULL AND discharge_location = 'DIED') + (SELECT COUNT(*) AS n FROM ecom_shipments WHERE delivered_at IS NULL AND status = 'LOST') + (SELECT COUNT(*) AS n FROM map_places WHERE closed_date IS NULL AND status = 'CLOSED_PERMANENTLY') AS n
+- id: D5
+  title: 数值以文本存储，混有非数值内容
+  tables:
+  - med_lab_events
+  - ecom_products
+  - map_reviews
+  - map_places
+  columns:
+  - med_lab_events.value
+  - ecom_products.weight_kg
+  - map_reviews.rating
+  - map_places.seating_capacity
+  naive_failure: '[医疗] 模型 AVG(value)。MySQL 把 ''NEG''、''>100''、''pending''、'''' 当 0，不报错但均值错。 [电商] 模型 AVG(rating)。MySQL 把 ''N/A''、'''' 当 0，不报错但均值偏低；MAX(weight_kg) 会按字符串比较。 [地图] 模型 AVG(rating)。MySQL 把 ''N/A''、'''' 当 0，不报错但均值偏低；MAX(seating_capacity) 会按字符串比较。'
+  harness_tool: profile_column
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM med_lab_events WHERE value NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$') + (SELECT COUNT(*) AS n FROM ecom_products WHERE weight_kg IS NOT NULL AND weight_kg NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$') + (SELECT COUNT(*) AS n FROM map_reviews WHERE rating IS NOT NULL AND rating NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$') AS n
+- id: D6
+  title: 同一真人用不同账号重复注册
+  tables:
+  - leg_parties
+  - tt_users
+  columns:
+  - leg_parties.party_id
+  - leg_parties.name
+  - leg_parties.state
+  - tt_users.user_id
+  - tt_users.device_id
+  naive_failure: '[法律] 按 party_id 统计公司数，同一家公司被算两次。 [短视频] 按 user_id 统计用户数，同一设备注册的两个账号被算成两个人。'
+  harness_tool: profile_column
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM (SELECT name, party_type, state FROM leg_parties GROUP BY name, party_type, state HAVING COUNT(*) > 1) t) + (SELECT COUNT(*) AS n FROM (SELECT device_id FROM tt_users GROUP BY device_id HAVING COUNT(*) > 1) t) AS n
+- id: D7
+  title: 混合时区，没有时区列
+  tables:
+  - med_lab_events
+  - map_reviews
+  columns:
+  - med_lab_events.charttime
+  - med_lab_events.source
+  - map_reviews.created_at
+  - map_reviews.source
+  naive_failure: '[医疗] 批量导入的化验时间是 UTC，急诊录入的是本地时间；按"某天"过滤会错桶 4-5 小时。 [地图] MOBILE 上报的评价时间是 UTC，WEB 记录的是美东本地时间；按本地日期过滤会错桶 5 小时。'
+  harness_tool: resolve_term
+  documented: '[医疗] 见 glossary：source=''LIS_BATCH'' 为 UTC，其余为美东本地时间；数据窗口 2023-11-06~2024-03-09 全在标准时间，UTC=本地+5h [地图] source=''MOBILE'' 为 UTC，WEB 为美东本地时间；数据窗口 2024-11-04~2025-03-08 全在标准时间，UTC=本地+5h'
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM med_lab_events WHERE source = 'LIS_BATCH') + (SELECT COUNT(*) AS n FROM map_reviews WHERE source = 'MOBILE') AS n
+- id: D8
+  title: 孤儿外键，未声明约束
+  tables:
+  - leg_docket_entries
+  - leg_cases
+  - ecom_orders
+  - ecom_customers
+  - map_reviews
+  - map_places
+  columns:
+  - leg_docket_entries.case_no
+  - ecom_orders.customer_id
+  - map_reviews.place_ref
+  naive_failure: '[法律] INNER JOIN docket_entries 到 cases，孤儿记录静默消失。 [电商] INNER JOIN orders 到 customers，已删除账号的订单静默消失。 [地图] INNER JOIN reviews 到 places，已删除地点的评价静默消失。'
+  harness_tool: infer_joins
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM leg_docket_entries d LEFT JOIN leg_cases c ON d.case_no = c.case_id WHERE c.case_id IS NULL) + (SELECT COUNT(*) AS n FROM ecom_orders o LEFT JOIN ecom_customers c ON o.customer_id = c.customer_id WHERE c.customer_id IS NULL) + (SELECT COUNT(*) AS n FROM map_reviews r LEFT JOIN map_places p ON r.place_ref = p.place_id WHERE p.place_id IS NULL) AS n
+- id: D9
+  title: 枚举值超出文档范围
+  tables:
+  - leg_cases
+  - tt_reports
+  columns:
+  - leg_cases.disposition_code
+  - tt_reports.reason_code
+  naive_failure: '[法律] COLUMN COMMENT 只写了 1-4，模型自信地解释 5-9（实际为遗留系统代码）。 [短视频] COLUMN COMMENT 只写了 1-4，模型自信地解释 5-9（实际为遗留系统代码）。'
+  harness_tool: resolve_term
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM leg_cases WHERE disposition_code > 4) + (SELECT COUNT(*) AS n FROM tt_reports WHERE reason_code > 4) AS n
+- id: D10
+  title: 金额单位混用
+  tables:
+  - med_lab_events
+  - ecom_payments
+  - tt_promotions
+  columns:
+  - med_lab_events.valuenum
+  - med_lab_events.uom
+  - ecom_payments.amount
+  - ecom_payments.gateway
+  - tt_promotions.budget
+  - tt_promotions.billing_system
+  naive_failure: '[医疗] 血糖 mg/dL 与 mmol/L 混用直接求平均；2024-01-15 之前开单的 claims.amount 单位是分（cents），之后是美元，直接 SUM 会虚高约 100 倍。 [电商] gateway=''LEGACY'' 的支付金额单位是分（cents），STRIPE 是美元，直接 SUM 会虚高约 30 倍。 [短视频] billing_system=''LEGACY'' 的预算单位是分（cents），ADS_V2 是美元，直接 SUM 会虚高约 30 倍。'
+  harness_tool: resolve_term
+  detect_sql: SELECT (SELECT COUNT(*) AS n FROM med_lab_events e JOIN med_lab_items i USING (itemid) WHERE i.label = 'Glucose' AND e.uom = 'mmol/L') + (SELECT COUNT(*) AS n FROM ecom_payments WHERE gateway = 'LEGACY') + (SELECT COUNT(*) AS n FROM tt_promotions WHERE billing_system = 'LEGACY') AS n
+controls:
+  note: '5 clean questions (defect_ids: []), one per industry, so the harness is checked for hurting simple cases.'
