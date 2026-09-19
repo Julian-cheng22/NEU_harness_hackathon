@@ -1,0 +1,215 @@
+# 31 questions: Q01-Q25 defect-focused, C01-C06 controls. Gold answers verified against MySQL for dataset v1.0.0.
+questions:
+- id: Q01
+  defect_ids:
+  - D1
+  question: 2023 年 12 月有多少位不同的患者被开过处方？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT pat_id) FROM prescriptions WHERE start_time >= '2023-12-01' AND start_time < '2024-01-01'
+  naive_sql: SELECT COUNT(DISTINCT subject_id) FROM prescriptions WHERE start_time >= '2023-12-01' AND start_time < '2024-01-01'
+- id: Q02
+  defect_ids:
+  - D2
+  question: 状态为已支付的理赔总共有多少笔？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM claims WHERE status = 'paid'
+  naive_sql: SELECT COUNT(*) FROM claims WHERE status = 'DISCHARGED'
+- id: Q03
+  defect_ids:
+  - D3
+  question: 住院次数最多的前 5 位患者是谁？
+  answer_type: table
+  gold_sql: SELECT subject_id FROM admissions GROUP BY subject_id ORDER BY COUNT(*) DESC, subject_id LIMIT 5
+  naive_sql: SELECT subject_id FROM patients ORDER BY total_admissions DESC, subject_id LIMIT 5
+- id: Q04
+  defect_ids:
+  - D4
+  question: 目前仍在住院的患者有多少？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM admissions WHERE dischtime IS NULL AND discharge_location <> 'DIED'
+  naive_sql: SELECT COUNT(*) FROM admissions WHERE dischtime IS NULL
+- id: Q05
+  defect_ids:
+  - D5
+  question: 血肌酐（Creatinine）的平均值是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(value AS DECIMAL(10,3))) FROM lab_events e JOIN lab_items i USING (itemid) WHERE i.label = 'Creatinine' AND value REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(value) FROM lab_events e JOIN lab_items i USING (itemid) WHERE i.label = 'Creatinine'
+- id: Q06
+  defect_ids:
+  - D6
+  question: 医院一共有多少位不同的患者？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM (SELECT 1 FROM patients GROUP BY name, dob) t
+  naive_sql: SELECT COUNT(DISTINCT subject_id) FROM patients
+- id: Q07
+  defect_ids:
+  - D7
+  question: 2023-12-12（本地日期）当天完成了多少项化验？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM lab_events WHERE DATE(DATE_SUB(charttime, INTERVAL IF(source='LIS_BATCH',5,0) HOUR)) = '2023-12-12'
+  naive_sql: SELECT COUNT(*) FROM lab_events WHERE DATE(charttime) = '2023-12-12'
+- id: Q08
+  defect_ids:
+  - D8
+  question: 一共开了多少条处方？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM prescriptions
+  naive_sql: SELECT COUNT(*) FROM prescriptions p JOIN admissions a ON p.hadm_id = a.hadm_id
+  notes: 孤儿处方被 INNER JOIN 丢掉
+- id: Q09
+  defect_ids:
+  - D9
+  question: 出院去向（discharge_disposition）为 7 的住院有多少次？分别代表什么？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM admissions WHERE discharge_disposition = 7
+  notes: 代码 5-9 为遗留系统，glossary 需说明"含义未知/遗留"，不能编造
+- id: Q10
+  defect_ids:
+  - D10
+  question: 血糖（Glucose）平均值是多少（统一为 mg/dL）？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CASE WHEN e.uom='mmol/L' THEN e.valuenum*18.016 ELSE e.valuenum END) FROM lab_events e JOIN lab_items i USING (itemid) WHERE i.label='Glucose'
+  naive_sql: SELECT AVG(valuenum) FROM lab_events e JOIN lab_items i USING (itemid) WHERE i.label='Glucose'
+- id: Q11
+  defect_ids:
+  - D1
+  question: 有多少位患者既有理赔记录又有处方记录？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT c.patient_id) FROM claims c JOIN prescriptions r ON r.pat_id = c.patient_id
+  naive_sql: SELECT COUNT(DISTINCT c.patient_id) FROM claims c JOIN prescriptions r ON r.subject_id = c.patient_id
+  notes: prescriptions 的患者列叫 pat_id，不是 subject_id
+- id: Q12
+  defect_ids:
+  - D1
+  question: 已支付（paid）理赔笔数最多的前 3 位患者是谁？（同数按患者 ID 升序）
+  answer_type: table
+  gold_sql: SELECT patient_id FROM claims WHERE status = 'paid' GROUP BY patient_id ORDER BY COUNT(*) DESC, patient_id LIMIT 3
+  naive_sql: SELECT subject_id FROM claims WHERE status = 'paid' GROUP BY subject_id ORDER BY COUNT(*) DESC, subject_id LIMIT 3
+- id: Q13
+  defect_ids:
+  - D2
+  question: 已出院（DISCHARGED）的住院有多少次？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM admissions WHERE status = 'DISCHARGED'
+  naive_sql: SELECT COUNT(*) FROM admissions WHERE status = 'paid'
+  notes: 模型从 claims 学到 paid，套到 admissions 上返回 0
+- id: Q14
+  defect_ids:
+  - D3
+  question: 最近一次住院在 Cardiology 科室的患者有多少位？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT a.subject_id) FROM admissions a JOIN departments d ON d.dept_id = a.dept_id WHERE d.name = 'Cardiology' AND a.admittime = (SELECT MAX(b.admittime) FROM admissions b WHERE b.subject_id = a.subject_id)
+  naive_sql: SELECT COUNT(*) FROM patients p JOIN departments d ON d.dept_id = p.last_dept_id WHERE d.name = 'Cardiology'
+  notes: patients.last_dept_id 是过期缓存
+- id: Q15
+  defect_ids:
+  - D4
+  question: 截至 2024-03-10，已住院超过 5 天（入院早于 2024-03-05）且仍在院的患者有多少人？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM admissions WHERE dischtime IS NULL AND discharge_location <> 'DIED' AND admittime < '2024-03-05'
+  naive_sql: SELECT COUNT(*) FROM admissions WHERE dischtime IS NULL AND admittime < '2024-03-05'
+- id: Q16
+  defect_ids:
+  - D4
+  question: 有多少次住院已经结束（已出院或死亡）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM admissions WHERE status <> 'ADMITTED'
+  naive_sql: SELECT COUNT(*) FROM admissions WHERE dischtime IS NOT NULL
+- id: Q17
+  defect_ids:
+  - D5
+  question: 血红蛋白（Hemoglobin）的最低值是多少？
+  answer_type: scalar
+  gold_sql: SELECT MIN(CAST(value AS DECIMAL(10,3))) FROM lab_events e JOIN lab_items i ON i.itemid = e.itemid WHERE i.label = 'Hemoglobin' AND value REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT MIN(CAST(value AS DECIMAL(10,3))) FROM lab_events e JOIN lab_items i ON i.itemid = e.itemid WHERE i.label = 'Hemoglobin'
+  notes: junk 值被当成 0，最小值变成 0
+- id: Q18
+  defect_ids:
+  - D5
+  question: 血钠（Sodium）化验结果的平均值是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(value AS DECIMAL(10,3))) FROM lab_events e JOIN lab_items i ON i.itemid = e.itemid WHERE i.label = 'Sodium' AND value REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(value) FROM lab_events e JOIN lab_items i ON i.itemid = e.itemid WHERE i.label = 'Sodium'
+- id: Q19
+  defect_ids:
+  - D6
+  question: 有过住院记录的不同患者（按个人计）有多少位？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM (SELECT p.name, p.dob FROM patients p JOIN admissions a ON a.subject_id = p.subject_id GROUP BY p.name, p.dob) t
+  naive_sql: SELECT COUNT(DISTINCT a.subject_id) FROM admissions a
+- id: Q20
+  defect_ids:
+  - D6
+  question: 哪些患者（姓名+出生日期）在系统里有多个登记记录？（按姓名、出生日期升序）
+  answer_type: table
+  gold_sql: SELECT name, dob FROM patients GROUP BY name, dob HAVING COUNT(*) > 1 ORDER BY name, dob
+  naive_sql: SELECT name, dob FROM patients GROUP BY subject_id, name, dob HAVING COUNT(*) > 1 ORDER BY name, dob
+- id: Q21
+  defect_ids:
+  - D7
+  question: 2024-01-20（本地日期）当天，本地时间 19 点及以后完成了多少项化验？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM lab_events WHERE DATE(DATE_SUB(charttime, INTERVAL IF(source='LIS_BATCH',5,0) HOUR)) = '2024-01-20' AND HOUR(DATE_SUB(charttime, INTERVAL IF(source='LIS_BATCH',5,0) HOUR)) >= 19
+  naive_sql: SELECT COUNT(*) FROM lab_events WHERE DATE(charttime) = '2024-01-20' AND HOUR(charttime) >= 19
+- id: Q22
+  defect_ids:
+  - D8
+  question: 2023 年 12 月一共开出多少条处方？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM prescriptions WHERE start_time >= '2023-12-01' AND start_time < '2024-01-01'
+  naive_sql: SELECT COUNT(*) FROM prescriptions r JOIN admissions a ON a.hadm_id = r.hadm_id WHERE r.start_time >= '2023-12-01' AND r.start_time < '2024-01-01'
+  notes: 孤儿处方被 INNER JOIN 丢掉
+- id: Q23
+  defect_ids:
+  - D8
+  question: 有多少条处方找不到对应的住院记录？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM prescriptions r LEFT JOIN admissions a ON a.hadm_id = r.hadm_id WHERE a.hadm_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM prescriptions r JOIN admissions a ON a.hadm_id = r.hadm_id WHERE a.hadm_id IS NULL
+- id: Q24
+  defect_ids:
+  - D9
+  question: 按出院代码（discharge_disposition）统计各代码的住院次数（不含在院、代码为空的）。
+  answer_type: table
+  gold_sql: SELECT discharge_disposition, COUNT(*) FROM admissions WHERE discharge_disposition IS NOT NULL GROUP BY discharge_disposition
+  naive_sql: SELECT discharge_disposition, COUNT(*) FROM admissions WHERE discharge_disposition BETWEEN 1 AND 4 GROUP BY discharge_disposition
+  notes: 只信文档 1-4，漏掉代码 5-9
+- id: Q25
+  defect_ids:
+  - D10
+  question: 已支付（paid）理赔的总金额是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN billed_at < '2024-01-15' THEN amount / 100 ELSE amount END) FROM claims WHERE status = 'paid'
+  naive_sql: SELECT SUM(amount) FROM claims WHERE status = 'paid'
+  notes: 2024-01-15 之前开单的金额单位是分
+- id: C01
+  defect_ids: []
+  question: 医院一共有多少名医护人员？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM providers
+- id: C02
+  defect_ids: []
+  question: 一共有多少个科室？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM departments
+- id: C03
+  defect_ids: []
+  question: Cardiology 科室有多少名医生（role 为 physician）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM providers p JOIN departments d ON d.dept_id = p.dept_id WHERE d.name = 'Cardiology' AND p.role = 'physician'
+- id: C04
+  defect_ids: []
+  question: Heparin 一共开了多少条处方？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM prescriptions WHERE drug = 'Heparin'
+- id: C05
+  defect_ids: []
+  question: 急诊类型（EMERGENCY）的住院有多少次？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM admissions WHERE admission_type = 'EMERGENCY'
+- id: C06
+  defect_ids: []
+  question: 一共做过多少次手术/操作（procedures 表的记录数）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM procedures

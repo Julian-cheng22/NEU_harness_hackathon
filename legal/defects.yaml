@@ -1,0 +1,109 @@
+# Defect contract for the synthetic litigation dataset. detect_sql returns n > 0 when the defect is present.
+defects:
+- id: D1
+  title: 同一概念的字段命名不一致
+  tables:
+  - cases
+  - docket_entries
+  - hearings
+  - fee_invoices
+  columns:
+  - cases.case_id
+  - docket_entries.case_no
+  - hearings.matter_id
+  - fee_invoices.case_id
+  naive_failure: 模型假设所有表都用 case_id，join docket_entries 或 hearings 时列不存在或猜错。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name IN ('docket_entries','hearings') AND column_name IN ('case_no','matter_id')
+- id: D2
+  title: 同名列，取值域不同
+  tables:
+  - cases
+  - fee_invoices
+  columns:
+  - cases.status
+  - fee_invoices.status
+  naive_failure: 从 fee_invoices 学到 status='paid'，套到 cases 上返回 0 行（cases 用 OPEN/CLOSED/APPEALED）。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(DISTINCT status) AS n FROM cases WHERE status NOT IN (SELECT DISTINCT status FROM fee_invoices)
+- id: D3
+  title: 冗余列与真实来源不一致（过期缓存）
+  tables:
+  - cases
+  - docket_entries
+  columns:
+  - cases.num_filings
+  naive_failure: 模型直接读 cases.num_filings 统计文件数，结果与 docket_entries 实际计数不符。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM cases c WHERE c.num_filings <> (SELECT COUNT(*) FROM docket_entries d WHERE d.case_no = c.case_id)
+- id: D4
+  title: NULL 含两种互不兼容的含义
+  tables:
+  - cases
+  columns:
+  - cases.closed_date
+  naive_failure: 模型认为 closed_date IS NULL 就是未结案，实际有保密和解案件已结案但不记录结案日期，未结案数被高估。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM cases WHERE closed_date IS NULL AND status = 'CLOSED'
+- id: D5
+  title: 数值以文本存储，混有非数值内容
+  tables:
+  - cases
+  columns:
+  - cases.award_amount
+  naive_failure: 模型 AVG(award_amount)。MySQL 把 'sealed'、'TBD'、'N/A'、'' 当 0，不报错但均值错。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM cases WHERE award_amount IS NOT NULL AND award_amount NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+- id: D6
+  title: 同一当事人以不同代理键重复登记
+  tables:
+  - parties
+  columns:
+  - parties.party_id
+  - parties.name
+  - parties.state
+  naive_failure: 按 party_id 统计公司数，同一家公司被算两次。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM (SELECT name, party_type, state FROM parties GROUP BY name, party_type, state HAVING COUNT(*) > 1) t
+- id: D7
+  title: 混合时区，没有时区列
+  tables:
+  - docket_entries
+  columns:
+  - docket_entries.filed_at
+  - docket_entries.source
+  naive_failure: ECF 电子提交的时间是 UTC，书记员录入的是美东本地时间；按本地日期过滤会错桶 5 小时。
+  harness_tool: resolve_term
+  documented: source='ECF' 为 UTC，其余为美东本地时间；数据窗口 2024-11-04~2025-03-08 全在标准时间，UTC=本地+5h（hearings.scheduled_at 一律是本地时间）
+  detect_sql: SELECT COUNT(*) AS n FROM docket_entries WHERE source = 'ECF'
+- id: D8
+  title: 孤儿外键，未声明约束
+  tables:
+  - docket_entries
+  - cases
+  columns:
+  - docket_entries.case_no
+  naive_failure: INNER JOIN docket_entries 到 cases，孤儿记录静默消失。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM docket_entries d LEFT JOIN cases c ON d.case_no = c.case_id WHERE c.case_id IS NULL
+- id: D9
+  title: 枚举值超出文档范围
+  tables:
+  - cases
+  columns:
+  - cases.disposition_code
+  naive_failure: COLUMN COMMENT 只写了 1-4，模型自信地解释 5-9（实际为遗留系统代码）。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM cases WHERE disposition_code > 4
+- id: D10
+  title: 金额单位混用
+  tables:
+  - fee_invoices
+  columns:
+  - fee_invoices.amount
+  - fee_invoices.billed_at
+  naive_failure: 2025-01-15 之前开单的发票金额单位是分（cents），之后是美元，直接 SUM 会虚高约 100 倍。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM fee_invoices WHERE billed_at < '2025-01-15'
+controls:
+  note: 'Keep clean questions (defect_ids: []) so the harness is checked for hurting simple cases.'

@@ -1,0 +1,215 @@
+# 31 questions: Q01-Q25 defect-focused, C01-C06 controls. Gold answers verified against MySQL for dataset v1.0.0.
+questions:
+- id: Q01
+  defect_ids:
+  - D1
+  question: 有多少个案件至少有一次听证？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT c.case_id) FROM cases c JOIN hearings h ON h.matter_id = c.case_id
+  naive_sql: SELECT COUNT(DISTINCT c.case_id) FROM cases c JOIN hearings h ON h.case_id = c.case_id
+  notes: hearings 的案件列叫 matter_id
+- id: Q02
+  defect_ids:
+  - D1
+  question: docket 条数最多的前 3 个案件是哪些？（只统计确实存在的案件；同数按案件号升序）
+  answer_type: table
+  gold_sql: SELECT c.case_id FROM cases c JOIN docket_entries d ON d.case_no = c.case_id GROUP BY c.case_id ORDER BY COUNT(*) DESC, c.case_id LIMIT 3
+  naive_sql: SELECT c.case_id FROM cases c JOIN docket_entries d ON d.case_id = c.case_id GROUP BY c.case_id ORDER BY COUNT(*) DESC, c.case_id LIMIT 3
+- id: Q03
+  defect_ids:
+  - D1
+  question: 有多少个案件提交过 docket 文件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT c.case_id) FROM cases c JOIN docket_entries d ON d.case_no = c.case_id
+  naive_sql: SELECT COUNT(DISTINCT c.case_id) FROM cases c JOIN docket_entries d ON d.case_id = c.case_id
+- id: Q04
+  defect_ids:
+  - D2
+  question: 已结案（CLOSED）的案件有多少件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM cases WHERE status = 'CLOSED'
+  naive_sql: SELECT COUNT(*) FROM cases WHERE status = 'paid'
+  notes: 模型把 fee_invoices 的取值套到 cases 上
+- id: Q05
+  defect_ids:
+  - D2
+  question: 已支付（paid）的律师费发票有多少张？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM fee_invoices WHERE status = 'paid'
+  naive_sql: SELECT COUNT(*) FROM fee_invoices WHERE status = 'CLOSED'
+- id: Q06
+  defect_ids:
+  - D3
+  question: docket 文件数最多的前 5 个案件是哪些？（只统计确实存在的案件；同数按案件号升序）
+  answer_type: table
+  gold_sql: SELECT c.case_id FROM cases c JOIN docket_entries d ON d.case_no = c.case_id GROUP BY c.case_id ORDER BY COUNT(*) DESC, c.case_id LIMIT 5
+  naive_sql: SELECT case_id FROM cases ORDER BY num_filings DESC, case_id LIMIT 5
+  notes: cases.num_filings 是过期缓存
+- id: Q07
+  defect_ids:
+  - D3
+  question: 平均每个案件有多少条 docket 记录？（只统计属于已存在案件的记录）
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) / (SELECT COUNT(*) FROM cases) FROM docket_entries d JOIN cases c ON c.case_id = d.case_no
+  naive_sql: SELECT AVG(num_filings) FROM cases
+- id: Q08
+  defect_ids:
+  - D4
+  question: 目前仍在审理（未结案）的案件有多少件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM cases WHERE status = 'OPEN'
+  naive_sql: SELECT COUNT(*) FROM cases WHERE closed_date IS NULL
+  notes: 保密和解案件已结案，但 closed_date 为空
+- id: Q09
+  defect_ids:
+  - D4
+  question: 已结案或上诉中的案件里，有多少件没有记录结案日期？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM cases WHERE status IN ('CLOSED','APPEALED') AND closed_date IS NULL
+  naive_sql: SELECT COUNT(*) FROM cases WHERE closed_date IS NULL
+- id: Q10
+  defect_ids:
+  - D5
+  question: 胜诉（disposition_code = 1）案件的平均判赔金额是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(award_amount AS DECIMAL(14,2))) FROM cases WHERE disposition_code = 1 AND award_amount REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(award_amount) FROM cases WHERE disposition_code = 1
+- id: Q11
+  defect_ids:
+  - D5
+  question: 和解（disposition_code = 3）案件的平均和解金额是多少？（只统计有明确金额的）
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(award_amount AS DECIMAL(14,2))) FROM cases WHERE disposition_code = 3 AND award_amount REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(award_amount) FROM cases WHERE disposition_code = 3
+- id: Q12
+  defect_ids:
+  - D5
+  question: 所有有明确金额的案件中，最低的判赔或和解金额是多少？
+  answer_type: scalar
+  gold_sql: SELECT MIN(CAST(award_amount AS DECIMAL(14,2))) FROM cases WHERE award_amount REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT MIN(CAST(award_amount AS DECIMAL(14,2))) FROM cases WHERE award_amount IS NOT NULL
+  notes: junk 值被当成 0
+- id: Q13
+  defect_ids:
+  - D6
+  question: 系统里一共有多少家不同的公司当事人？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM (SELECT name, state FROM parties WHERE party_type = 'corporation' GROUP BY name, state) t
+  naive_sql: SELECT COUNT(*) FROM parties WHERE party_type = 'corporation'
+- id: Q14
+  defect_ids:
+  - D6
+  question: 有多少家不同的公司（按个体计）参与过案件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM (SELECT p.name, p.state FROM parties p JOIN case_parties cp ON cp.party_id = p.party_id WHERE p.party_type = 'corporation' GROUP BY p.name, p.state) t
+  naive_sql: SELECT COUNT(DISTINCT p.party_id) FROM parties p JOIN case_parties cp ON cp.party_id = p.party_id WHERE p.party_type = 'corporation'
+- id: Q15
+  defect_ids:
+  - D6
+  question: 哪些公司（名称+州）在系统里有多个登记记录？（按名称、州升序）
+  answer_type: table
+  gold_sql: SELECT name, state FROM parties GROUP BY name, party_type, state HAVING COUNT(*) > 1 ORDER BY name, state
+  naive_sql: SELECT name, state FROM parties GROUP BY party_id, name, state HAVING COUNT(*) > 1 ORDER BY name, state
+- id: Q16
+  defect_ids:
+  - D7
+  question: 2024-12-10（本地日期）当天提交了多少条 docket？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM docket_entries WHERE DATE(DATE_SUB(filed_at, INTERVAL IF(source='ECF',5,0) HOUR)) = '2024-12-10'
+  naive_sql: SELECT COUNT(*) FROM docket_entries WHERE DATE(filed_at) = '2024-12-10'
+- id: Q17
+  defect_ids:
+  - D7
+  question: 2025-01-14（本地日期）当天，本地时间 17 点及以后提交了多少条 docket？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM docket_entries WHERE DATE(DATE_SUB(filed_at, INTERVAL IF(source='ECF',5,0) HOUR)) = '2025-01-14' AND HOUR(DATE_SUB(filed_at, INTERVAL IF(source='ECF',5,0) HOUR)) >= 17
+  naive_sql: SELECT COUNT(*) FROM docket_entries WHERE DATE(filed_at) = '2025-01-14' AND HOUR(filed_at) >= 17
+- id: Q18
+  defect_ids:
+  - D8
+  question: 一共有多少条 docket 记录？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM docket_entries
+  naive_sql: SELECT COUNT(*) FROM docket_entries d JOIN cases c ON c.case_id = d.case_no
+  notes: 孤儿记录被 INNER JOIN 丢掉
+- id: Q19
+  defect_ids:
+  - D8
+  question: 有多少条 docket 记录找不到对应的案件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM docket_entries d LEFT JOIN cases c ON c.case_id = d.case_no WHERE c.case_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM docket_entries d JOIN cases c ON c.case_id = d.case_no WHERE c.case_id IS NULL
+- id: Q20
+  defect_ids:
+  - D9
+  question: 按结案代码（disposition_code）统计各代码的案件数（不含未结案）。
+  answer_type: table
+  gold_sql: SELECT disposition_code, COUNT(*) FROM cases WHERE disposition_code IS NOT NULL GROUP BY disposition_code
+  naive_sql: SELECT disposition_code, COUNT(*) FROM cases WHERE disposition_code BETWEEN 1 AND 4 GROUP BY disposition_code
+  notes: 只信文档 1-4，漏掉 5-9
+- id: Q21
+  defect_ids:
+  - D9
+  question: 结案代码为 7 的案件有多少件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM cases WHERE disposition_code = 7
+  notes: 代码 5-9 是遗留系统代码，glossary 应说明含义未知
+- id: Q22
+  defect_ids:
+  - D10
+  question: 已支付（paid）发票的总金额是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN billed_at < '2025-01-15' THEN amount / 100 ELSE amount END) FROM fee_invoices WHERE status = 'paid'
+  naive_sql: SELECT SUM(amount) FROM fee_invoices WHERE status = 'paid'
+- id: Q23
+  defect_ids:
+  - D10
+  question: 平均每张发票（不含作废 void）的金额是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CASE WHEN billed_at < '2025-01-15' THEN amount / 100 ELSE amount END) FROM fee_invoices WHERE status <> 'void'
+  naive_sql: SELECT AVG(amount) FROM fee_invoices WHERE status <> 'void'
+- id: Q24
+  defect_ids:
+  - D2
+  - D10
+  question: 未支付（unpaid）发票的总金额是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN billed_at < '2025-01-15' THEN amount / 100 ELSE amount END) FROM fee_invoices WHERE status = 'unpaid'
+  naive_sql: SELECT SUM(amount) FROM fee_invoices WHERE status = 'unpaid'
+- id: Q25
+  defect_ids:
+  - D10
+  question: 按美元计，金额最大的 3 张发票是哪些？（同额按发票号升序）
+  answer_type: table
+  gold_sql: SELECT invoice_id FROM fee_invoices ORDER BY CASE WHEN billed_at < '2025-01-15' THEN amount / 100 ELSE amount END DESC, invoice_id LIMIT 3
+  naive_sql: SELECT invoice_id FROM fee_invoices ORDER BY amount DESC, invoice_id LIMIT 3
+- id: C01
+  defect_ids: []
+  question: 一共有多少位法官？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM judges
+- id: C02
+  defect_ids: []
+  question: 一共有多少家法院？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM courts
+- id: C03
+  defect_ids: []
+  question: 一共有多少名律师？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM attorneys
+- id: C04
+  defect_ids: []
+  question: 劳动争议（employment）类型的案件有多少件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM cases WHERE case_type = 'employment'
+- id: C05
+  defect_ids: []
+  question: 庭审（trial）类型的听证一共有多少次？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM hearings WHERE hearing_type = 'trial'
+- id: C06
+  defect_ids: []
+  question: Hale & Ross 律所有多少名律师？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM attorneys a JOIN law_firms f ON f.firm_id = a.firm_id WHERE f.name = 'Hale & Ross'

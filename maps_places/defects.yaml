@@ -1,0 +1,112 @@
+# Defect contract for the synthetic map-listings dataset. detect_sql returns n > 0 when the defect is present.
+defects:
+- id: D1
+  title: 同一概念的字段命名不一致
+  tables:
+  - places
+  - reviews
+  - photos
+  - flags
+  columns:
+  - reviews.place_ref
+  - photos.poi_id
+  - flags.listing_id
+  - ads.place_id
+  naive_failure: 模型假设所有表都用 place_id，join reviews、photos、flags 时列不存在或猜错。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND ((table_name = 'reviews' AND column_name = 'place_ref') OR (table_name = 'photos' AND column_name = 'poi_id') OR (table_name = 'flags' AND column_name = 'listing_id'))
+- id: D2
+  title: 同名列，取值域不同
+  tables:
+  - places
+  - ads
+  columns:
+  - places.status
+  - ads.status
+  naive_failure: 从 ads 学到 status='active'，套到 places 上返回 0 行（places 用 OPEN/TEMP_CLOSED/CLOSED_PERMANENTLY）。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(DISTINCT status) AS n FROM places WHERE status NOT IN (SELECT DISTINCT status FROM ads)
+- id: D3
+  title: 冗余列与真实来源不一致（过期缓存）
+  tables:
+  - places
+  - reviews
+  columns:
+  - places.review_count
+  - places.avg_rating
+  naive_failure: 模型直接读 places.review_count 或 avg_rating，结果与 reviews 实际数据不符。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM places p WHERE p.review_count <> (SELECT COUNT(*) FROM reviews r WHERE r.place_ref = p.place_id)
+- id: D4
+  title: NULL 含两种互不兼容的含义
+  tables:
+  - places
+  columns:
+  - places.closed_date
+  naive_failure: 模型认为 closed_date IS NULL 就是仍在营业，实际有永久关闭的地点没有记录关闭日期，还有暂停营业的地点，营业数被高估。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM places WHERE closed_date IS NULL AND status = 'CLOSED_PERMANENTLY'
+- id: D5
+  title: 数值以文本存储，混有非数值内容
+  tables:
+  - reviews
+  - places
+  columns:
+  - reviews.rating
+  - places.seating_capacity
+  naive_failure: 模型 AVG(rating)。MySQL 把 'N/A'、'' 当 0，不报错但均值偏低；MAX(seating_capacity) 会按字符串比较。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM reviews WHERE rating IS NOT NULL AND rating NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+- id: D6
+  title: 同一商家重复登记
+  tables:
+  - places
+  columns:
+  - places.place_id
+  - places.name
+  - places.address
+  naive_failure: 按 place_id 统计地点数，同一家店（同名同地址）被算两次。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM (SELECT name, address FROM places GROUP BY name, address HAVING COUNT(*) > 1) t
+- id: D7
+  title: 混合时区，没有时区列
+  tables:
+  - reviews
+  columns:
+  - reviews.created_at
+  - reviews.source
+  naive_failure: MOBILE 上报的评价时间是 UTC，WEB 记录的是美东本地时间；按本地日期过滤会错桶 5 小时。
+  harness_tool: resolve_term
+  documented: source='MOBILE' 为 UTC，WEB 为美东本地时间；数据窗口 2024-11-04~2025-03-08 全在标准时间，UTC=本地+5h
+  detect_sql: SELECT COUNT(*) AS n FROM reviews WHERE source = 'MOBILE'
+- id: D8
+  title: 孤儿外键，未声明约束
+  tables:
+  - reviews
+  - places
+  columns:
+  - reviews.place_ref
+  naive_failure: INNER JOIN reviews 到 places，已删除地点的评价静默消失。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM reviews r LEFT JOIN places p ON r.place_ref = p.place_id WHERE p.place_id IS NULL
+- id: D9
+  title: 枚举值超出文档范围
+  tables:
+  - flags
+  columns:
+  - flags.reason_code
+  naive_failure: COLUMN COMMENT 只写了 1-4，模型自信地解释 5-9（实际为遗留系统代码）。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM flags WHERE reason_code > 4
+- id: D10
+  title: 金额单位混用
+  tables:
+  - ads
+  columns:
+  - ads.spend
+  - ads.billing_system
+  naive_failure: billing_system='LEGACY' 的广告花费单位是分（cents），ADS_V2 是美元，直接 SUM 会虚高约 30 倍。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM ads WHERE billing_system = 'LEGACY'
+controls:
+  note: 'Keep clean questions (defect_ids: []) so the harness is checked for hurting simple cases.'

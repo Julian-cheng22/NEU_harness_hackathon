@@ -1,0 +1,115 @@
+# Defect contract for the synthetic short-video dataset. detect_sql returns n > 0 when the defect is present.
+defects:
+- id: D1
+  title: 同一概念的字段命名不一致
+  tables:
+  - users
+  - impressions
+  - likes
+  - comments
+  - follows
+  - videos
+  - creators
+  columns:
+  - impressions.uid
+  - likes.viewer_id
+  - comments.commenter_id
+  - follows.follower_id
+  - videos.creator_id
+  naive_failure: 模型假设所有表都用 user_id，join impressions、likes、comments 时列不存在或猜错。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND ((table_name = 'impressions' AND column_name = 'uid') OR (table_name = 'likes' AND column_name = 'viewer_id') OR (table_name = 'comments' AND column_name = 'commenter_id'))
+- id: D2
+  title: 同名列，取值域不同
+  tables:
+  - videos
+  - promotions
+  columns:
+  - videos.status
+  - promotions.status
+  naive_failure: 从 promotions 学到 status='active'，套到 videos 上返回 0 行（videos 用 PUBLISHED/PRIVATE/REMOVED）。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(DISTINCT status) AS n FROM videos WHERE status NOT IN (SELECT DISTINCT status FROM promotions)
+- id: D3
+  title: 冗余列与真实来源不一致（过期缓存）
+  tables:
+  - videos
+  - likes
+  - creators
+  - follows
+  columns:
+  - videos.like_count
+  - creators.follower_count
+  naive_failure: 模型直接读 videos.like_count 或 creators.follower_count，结果与 likes / follows 实际数据不符。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM videos v WHERE v.like_count <> (SELECT COUNT(*) FROM likes l WHERE l.video_id = v.video_id)
+- id: D4
+  title: NULL 含两种互不兼容的含义
+  tables:
+  - videos
+  columns:
+  - videos.removed_at
+  naive_failure: 模型认为 removed_at IS NULL 就是视频仍然可见，实际有旧系统下架的视频状态是 REMOVED 但没记录时间，可见视频数被高估。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM videos WHERE removed_at IS NULL AND status = 'REMOVED'
+- id: D5
+  title: 数值以文本存储，混有非数值内容
+  tables:
+  - videos
+  columns:
+  - videos.duration_sec
+  naive_failure: 模型 AVG(duration_sec)。MySQL 把 'N/A'、''、'live' 当 0，不报错但均值偏低；MAX 会按字符串比较。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM videos WHERE duration_sec IS NOT NULL AND duration_sec NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+- id: D6
+  title: 同一真人用不同账号重复注册
+  tables:
+  - users
+  columns:
+  - users.user_id
+  - users.device_id
+  naive_failure: 按 user_id 统计用户数，同一设备注册的两个账号被算成两个人。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM (SELECT device_id FROM users GROUP BY device_id HAVING COUNT(*) > 1) t
+- id: D7
+  title: 混合时区，没有时区列
+  tables:
+  - impressions
+  columns:
+  - impressions.shown_at
+  - impressions.source
+  naive_failure: CLIENT 上报的展示时间是 UTC，SERVER 记录的是美东本地时间；按本地日期过滤会错桶 5 小时。
+  harness_tool: resolve_term
+  documented: source='CLIENT' 为 UTC，SERVER 为美东本地时间；数据窗口 2024-11-04~2025-03-08 全在标准时间，UTC=本地+5h（videos.posted_at 及其他表的时间一律是本地时间）
+  detect_sql: SELECT COUNT(*) AS n FROM impressions WHERE source = 'CLIENT'
+- id: D8
+  title: 孤儿外键，未声明约束
+  tables:
+  - likes
+  - videos
+  columns:
+  - likes.video_id
+  naive_failure: INNER JOIN likes 到 videos，已彻底删除视频的点赞静默消失。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM likes l LEFT JOIN videos v ON l.video_id = v.video_id WHERE v.video_id IS NULL
+- id: D9
+  title: 枚举值超出文档范围
+  tables:
+  - reports
+  columns:
+  - reports.reason_code
+  naive_failure: COLUMN COMMENT 只写了 1-4，模型自信地解释 5-9（实际为遗留系统代码）。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM reports WHERE reason_code > 4
+- id: D10
+  title: 金额单位混用
+  tables:
+  - promotions
+  columns:
+  - promotions.budget
+  - promotions.billing_system
+  naive_failure: billing_system='LEGACY' 的预算单位是分（cents），ADS_V2 是美元，直接 SUM 会虚高约 30 倍。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM promotions WHERE billing_system = 'LEGACY'
+controls:
+  note: 'Keep clean questions (defect_ids: []) so the harness is checked for hurting simple cases.'

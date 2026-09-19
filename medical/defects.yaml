@@ -1,0 +1,110 @@
+# Defect contract for the synthetic hospital dataset. detect_sql returns n > 0 when the defect is present.
+defects:
+- id: D1
+  title: 同一概念的字段命名不一致
+  tables:
+  - admissions
+  - prescriptions
+  - claims
+  columns:
+  - admissions.subject_id
+  - prescriptions.pat_id
+  - claims.patient_id
+  naive_failure: 模型假设所有表都用 subject_id，join prescriptions 时列不存在或猜错。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name IN ('prescriptions','claims') AND column_name IN ('pat_id','patient_id')
+- id: D2
+  title: 同名列，取值域不同
+  tables:
+  - admissions
+  - claims
+  columns:
+  - admissions.status
+  - claims.status
+  naive_failure: 从 admissions 学到 status='DISCHARGED'，套到 claims 上返回 0 行（claims 用 'paid'/'denied'）。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(DISTINCT status) AS n FROM admissions WHERE status NOT IN (SELECT DISTINCT status FROM claims)
+- id: D3
+  title: 冗余列与真实来源不一致（过期缓存）
+  tables:
+  - patients
+  - admissions
+  columns:
+  - patients.total_admissions
+  - patients.last_dept_id
+  naive_failure: 模型直接读 patients.total_admissions 统计住院次数，结果与 admissions 实际计数不符。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM patients p WHERE p.total_admissions <> (SELECT COUNT(*) FROM admissions a WHERE a.subject_id = p.subject_id)
+- id: D4
+  title: NULL 含两种互不兼容的含义
+  tables:
+  - admissions
+  columns:
+  - admissions.dischtime
+  naive_failure: 模型认为 dischtime IS NULL 就是"仍在住院"，实际部分是数据缺失（已死亡转院），在院人数被高估。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM admissions WHERE dischtime IS NULL AND discharge_location = 'DIED'
+- id: D5
+  title: 数值以文本存储，混有非数值内容
+  tables:
+  - lab_events
+  columns:
+  - lab_events.value
+  naive_failure: 模型 AVG(value)。MySQL 把 'NEG'、'>100'、'pending'、'' 当 0，不报错但均值错。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM lab_events WHERE value NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+- id: D6
+  title: 同一患者以不同代理键重复登记
+  tables:
+  - patients
+  columns:
+  - patients.subject_id
+  - patients.name
+  - patients.dob
+  naive_failure: 按 subject_id 分组统计患者数，同一个人被算两次。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM (SELECT name, dob FROM patients GROUP BY name, dob HAVING COUNT(*) > 1) t
+- id: D7
+  title: 混合时区，没有时区列
+  tables:
+  - lab_events
+  columns:
+  - lab_events.charttime
+  - lab_events.source
+  naive_failure: 批量导入的化验时间是 UTC，急诊录入的是本地时间；按"某天"过滤会错桶 4-5 小时。
+  harness_tool: resolve_term
+  documented: 见 glossary：source='LIS_BATCH' 为 UTC，其余为美东本地时间；数据窗口 2023-11-06~2024-03-09 全在标准时间，UTC=本地+5h
+  detect_sql: SELECT COUNT(*) AS n FROM lab_events WHERE source = 'LIS_BATCH'
+- id: D8
+  title: 孤儿外键，未声明约束
+  tables:
+  - prescriptions
+  - admissions
+  columns:
+  - prescriptions.hadm_id
+  naive_failure: INNER JOIN prescriptions 到 admissions，孤儿处方静默消失。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM prescriptions p LEFT JOIN admissions a ON p.hadm_id = a.hadm_id WHERE a.hadm_id IS NULL
+- id: D9
+  title: 枚举值超出文档范围
+  tables:
+  - admissions
+  columns:
+  - admissions.discharge_disposition
+  naive_failure: COLUMN COMMENT 只写了 1-4，模型自信地解释 5-9（实际为遗留系统代码）。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM admissions WHERE discharge_disposition > 4
+- id: D10
+  title: 单位混用 / 含税与不含税
+  tables:
+  - lab_events
+  - claims
+  columns:
+  - lab_events.valuenum
+  - lab_events.uom
+  - claims.amount
+  naive_failure: 血糖 mg/dL 与 mmol/L 混用直接求平均；2024-01-15 之前开单的 claims.amount 单位是分（cents），之后是美元，直接 SUM 会虚高约 100 倍。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM lab_events e JOIN lab_items i USING (itemid) WHERE i.label = 'Glucose' AND e.uom = 'mmol/L'
+controls:
+  note: 'Keep clean questions (defect_ids: []) so the harness is checked for hurting simple cases.'

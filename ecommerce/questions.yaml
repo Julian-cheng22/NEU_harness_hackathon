@@ -1,0 +1,217 @@
+# 31 questions: Q01-Q25 defect-focused, C01-C06 controls. Gold answers verified against MySQL for dataset v1.0.0.
+questions:
+- id: Q01
+  defect_ids:
+  - D1
+  question: 有多少位客户写过评价？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT c.customer_id) FROM customers c JOIN reviews r ON r.user_id = c.customer_id
+  naive_sql: SELECT COUNT(DISTINCT c.customer_id) FROM customers c JOIN reviews r ON r.customer_id = c.customer_id
+  notes: reviews 的客户列叫 user_id
+- id: Q02
+  defect_ids:
+  - D1
+  question: 退货件数最多的前 3 位客户是谁？（只统计现有客户；同数按客户 ID 升序）
+  answer_type: table
+  gold_sql: SELECT c.customer_id FROM customers c JOIN returns r ON r.buyer_id = c.customer_id GROUP BY c.customer_id ORDER BY COUNT(*) DESC, c.customer_id LIMIT 3
+  naive_sql: SELECT c.customer_id FROM customers c JOIN returns r ON r.customer_id = c.customer_id GROUP BY c.customer_id ORDER BY COUNT(*) DESC, c.customer_id LIMIT 3
+- id: Q03
+  defect_ids:
+  - D1
+  question: 有多少个订单已经有发货记录？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT o.order_id) FROM orders o JOIN shipments s ON s.order_ref = o.order_id
+  naive_sql: SELECT COUNT(DISTINCT o.order_id) FROM orders o JOIN shipments s ON s.order_id = o.order_id
+- id: Q04
+  defect_ids:
+  - D2
+  question: 已送达（DELIVERED）的订单有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM orders WHERE status = 'DELIVERED'
+  naive_sql: SELECT COUNT(*) FROM orders WHERE status = 'captured'
+  notes: 模型把 payments 的取值套到 orders 上
+- id: Q05
+  defect_ids:
+  - D2
+  question: 已扣款（captured）的支付有多少笔？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM payments WHERE status = 'captured'
+  naive_sql: SELECT COUNT(*) FROM payments WHERE status = 'DELIVERED'
+- id: Q06
+  defect_ids:
+  - D3
+  question: 下单数最多的前 10 位客户是谁？（只统计现有客户；同数按客户 ID 升序）
+  answer_type: table
+  gold_sql: SELECT c.customer_id FROM customers c JOIN orders o ON o.customer_id = c.customer_id GROUP BY c.customer_id ORDER BY COUNT(*) DESC, c.customer_id LIMIT 10
+  naive_sql: SELECT customer_id FROM customers ORDER BY order_count DESC, customer_id LIMIT 10
+  notes: customers.order_count 是过期缓存
+- id: Q07
+  defect_ids:
+  - D3
+  - D5
+  question: 至少有 3 条有效评分的商品里，平均评分最高的前 3 个是哪些？（同分按商品 ID 升序）
+  answer_type: table
+  gold_sql: SELECT product_id FROM reviews WHERE rating REGEXP '^-?[0-9]+(\\.[0-9]+)?$' GROUP BY product_id HAVING COUNT(*) >= 3 ORDER BY AVG(CAST(rating AS DECIMAL(4,2))) DESC, product_id LIMIT 3
+  naive_sql: SELECT product_id FROM products ORDER BY avg_rating DESC, product_id LIMIT 3
+  notes: products.avg_rating 是过期缓存
+- id: Q08
+  defect_ids:
+  - D4
+  question: 目前仍在运输中（未送达且未丢失）的包裹有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM shipments WHERE status = 'IN_TRANSIT'
+  naive_sql: SELECT COUNT(*) FROM shipments WHERE delivered_at IS NULL
+  notes: 丢失包裹的 delivered_at 也为空
+- id: Q09
+  defect_ids:
+  - D4
+  question: 有多少个包裹的物流已经结束（已送达或已丢失）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM shipments WHERE status <> 'IN_TRANSIT'
+  naive_sql: SELECT COUNT(*) FROM shipments WHERE delivered_at IS NOT NULL
+- id: Q10
+  defect_ids:
+  - D5
+  question: 所有评价的平均评分是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(rating AS DECIMAL(4,2))) FROM reviews WHERE rating REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(rating) FROM reviews
+- id: Q11
+  defect_ids:
+  - D5
+  question: Electronics 类商品评价的平均评分是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(r.rating AS DECIMAL(4,2))) FROM reviews r JOIN products p ON p.product_id = r.product_id JOIN categories c ON c.category_id = p.category_id WHERE c.name = 'Electronics' AND r.rating REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(r.rating) FROM reviews r JOIN products p ON p.product_id = r.product_id JOIN categories c ON c.category_id = p.category_id WHERE c.name = 'Electronics'
+- id: Q12
+  defect_ids:
+  - D5
+  question: 最重的商品重量是多少千克？
+  answer_type: scalar
+  gold_sql: SELECT MAX(CAST(weight_kg AS DECIMAL(6,2))) FROM products WHERE weight_kg REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT MAX(weight_kg) FROM products
+  notes: 文本比较：'9.9' 大于 '13.5'
+- id: Q13
+  defect_ids:
+  - D6
+  question: 一共有多少位不同的客户？（同一 email 视为同一人）
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT email) FROM customers
+  naive_sql: SELECT COUNT(*) FROM customers
+- id: Q14
+  defect_ids:
+  - D6
+  question: 下过订单的不同客户（同一 email 视为同一人）有多少位？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT c.email) FROM customers c JOIN orders o ON o.customer_id = c.customer_id
+  naive_sql: SELECT COUNT(DISTINCT c.customer_id) FROM customers c JOIN orders o ON o.customer_id = c.customer_id
+- id: Q15
+  defect_ids:
+  - D6
+  question: 哪些 email 注册了多个账号？（按 email 升序）
+  answer_type: table
+  gold_sql: SELECT email FROM customers GROUP BY email HAVING COUNT(*) > 1 ORDER BY email
+  naive_sql: SELECT email FROM customers GROUP BY customer_id, email HAVING COUNT(*) > 1 ORDER BY email
+- id: Q16
+  defect_ids:
+  - D7
+  question: 2024-12-04（本地日期）当天有多少个订单？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM orders WHERE DATE(DATE_SUB(placed_at, INTERVAL IF(source='WEB',5,0) HOUR)) = '2024-12-04'
+  naive_sql: SELECT COUNT(*) FROM orders WHERE DATE(placed_at) = '2024-12-04'
+- id: Q17
+  defect_ids:
+  - D7
+  question: 2025-02-22（本地日期）当天，本地时间 19 点及以后下了多少个订单？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM orders WHERE DATE(DATE_SUB(placed_at, INTERVAL IF(source='WEB',5,0) HOUR)) = '2025-02-22' AND HOUR(DATE_SUB(placed_at, INTERVAL IF(source='WEB',5,0) HOUR)) >= 19
+  naive_sql: SELECT COUNT(*) FROM orders WHERE DATE(placed_at) = '2025-02-22' AND HOUR(placed_at) >= 19
+- id: Q18
+  defect_ids:
+  - D8
+  question: 一共有多少个订单？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM orders
+  naive_sql: SELECT COUNT(*) FROM orders o JOIN customers c ON c.customer_id = o.customer_id
+  notes: 已删除账号的订单被 INNER JOIN 丢掉
+- id: Q19
+  defect_ids:
+  - D8
+  question: 有多少个订单找不到对应的客户？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM orders o LEFT JOIN customers c ON c.customer_id = o.customer_id WHERE c.customer_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM orders o JOIN customers c ON c.customer_id = o.customer_id WHERE c.customer_id IS NULL
+- id: Q20
+  defect_ids:
+  - D9
+  question: 按退货原因代码（reason_code）统计各代码的退货件数。
+  answer_type: table
+  gold_sql: SELECT reason_code, COUNT(*) FROM returns GROUP BY reason_code
+  naive_sql: SELECT reason_code, COUNT(*) FROM returns WHERE reason_code BETWEEN 1 AND 4 GROUP BY reason_code
+  notes: 只信文档 1-4，漏掉 5-9
+- id: Q21
+  defect_ids:
+  - D9
+  question: 退货原因代码为 7 的退货有多少件？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM returns WHERE reason_code = 7
+  notes: 代码 5-9 是遗留系统代码，glossary 应说明含义未知
+- id: Q22
+  defect_ids:
+  - D10
+  question: 已扣款（captured）支付的总金额是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN gateway = 'LEGACY' THEN amount / 100 ELSE amount END) FROM payments WHERE status = 'captured'
+  naive_sql: SELECT SUM(amount) FROM payments WHERE status = 'captured'
+- id: Q23
+  defect_ids:
+  - D10
+  question: 平均每笔已扣款支付是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CASE WHEN gateway = 'LEGACY' THEN amount / 100 ELSE amount END) FROM payments WHERE status = 'captured'
+  naive_sql: SELECT AVG(amount) FROM payments WHERE status = 'captured'
+- id: Q24
+  defect_ids:
+  - D2
+  - D10
+  question: 已退款（refunded）支付的总金额是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN gateway = 'LEGACY' THEN amount / 100 ELSE amount END) FROM payments WHERE status = 'refunded'
+  naive_sql: SELECT SUM(amount) FROM payments WHERE status = 'refunded'
+- id: Q25
+  defect_ids:
+  - D10
+  question: 按美元计，金额最大的 3 笔支付是哪些？（同额按支付号升序）
+  answer_type: table
+  gold_sql: SELECT payment_id FROM payments ORDER BY CASE WHEN gateway = 'LEGACY' THEN amount / 100 ELSE amount END DESC, payment_id LIMIT 3
+  naive_sql: SELECT payment_id FROM payments ORDER BY amount DESC, payment_id LIMIT 3
+- id: C01
+  defect_ids: []
+  question: 一共有多少个仓库？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM warehouses
+- id: C02
+  defect_ids: []
+  question: 一共有多少个商品类别？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM categories
+- id: C03
+  defect_ids: []
+  question: 一共有多少个商品？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM products
+- id: C04
+  defect_ids: []
+  question: Electronics 类别下有多少个商品？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM products p JOIN categories c ON c.category_id = p.category_id WHERE c.name = 'Electronics'
+- id: C05
+  defect_ids: []
+  question: 购买数量达到 3 件及以上的订单项有多少条？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM order_items WHERE quantity >= 3
+- id: C06
+  defect_ids: []
+  question: 由 UPS 承运的包裹有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM shipments WHERE carrier = 'UPS'

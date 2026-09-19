@@ -1,0 +1,114 @@
+# Defect contract for the synthetic e-commerce dataset. detect_sql returns n > 0 when the defect is present.
+defects:
+- id: D1
+  title: 同一概念的字段命名不一致
+  tables:
+  - customers
+  - orders
+  - reviews
+  - returns
+  - shipments
+  columns:
+  - orders.customer_id
+  - reviews.user_id
+  - returns.buyer_id
+  - shipments.order_ref
+  naive_failure: 模型假设所有表都用 customer_id / order_id，join reviews、returns、shipments 时列不存在或猜错。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM information_schema.columns WHERE table_schema = DATABASE() AND ((table_name = 'reviews' AND column_name = 'user_id') OR (table_name = 'returns' AND column_name = 'buyer_id') OR (table_name = 'shipments' AND column_name = 'order_ref'))
+- id: D2
+  title: 同名列，取值域不同
+  tables:
+  - orders
+  - payments
+  columns:
+  - orders.status
+  - payments.status
+  naive_failure: 从 payments 学到 status='captured'，套到 orders 上返回 0 行（orders 用 PLACED/SHIPPED/DELIVERED/CANCELLED）。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(DISTINCT status) AS n FROM orders WHERE status NOT IN (SELECT DISTINCT status FROM payments)
+- id: D3
+  title: 冗余列与真实来源不一致（过期缓存）
+  tables:
+  - customers
+  - orders
+  - products
+  - reviews
+  columns:
+  - customers.order_count
+  - products.avg_rating
+  naive_failure: 模型直接读 customers.order_count 或 products.avg_rating，结果与 orders / reviews 实际数据不符。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM customers c WHERE c.order_count <> (SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.customer_id)
+- id: D4
+  title: NULL 含两种互不兼容的含义
+  tables:
+  - shipments
+  columns:
+  - shipments.delivered_at
+  naive_failure: 模型认为 delivered_at IS NULL 就是仍在运输中，实际部分包裹已丢失（LOST），在途数被高估。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM shipments WHERE delivered_at IS NULL AND status = 'LOST'
+- id: D5
+  title: 数值以文本存储，混有非数值内容
+  tables:
+  - reviews
+  - products
+  columns:
+  - reviews.rating
+  - products.weight_kg
+  naive_failure: 模型 AVG(rating)。MySQL 把 'N/A'、'' 当 0，不报错但均值偏低；MAX(weight_kg) 会按字符串比较。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM reviews WHERE rating IS NOT NULL AND rating NOT REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+- id: D6
+  title: 同一客户以不同代理键重复注册
+  tables:
+  - customers
+  columns:
+  - customers.customer_id
+  - customers.email
+  naive_failure: 按 customer_id 统计客户数，同一个人（同 email）被算两次。
+  harness_tool: profile_column
+  detect_sql: SELECT COUNT(*) AS n FROM (SELECT email FROM customers GROUP BY email HAVING COUNT(*) > 1) t
+- id: D7
+  title: 混合时区，没有时区列
+  tables:
+  - orders
+  columns:
+  - orders.placed_at
+  - orders.source
+  naive_failure: WEB 下单时间是 UTC，呼叫中心录入的是美东本地时间；按本地日期过滤会错桶 5 小时。
+  harness_tool: resolve_term
+  documented: source='WEB' 为 UTC，CALL_CENTER 为美东本地时间；数据窗口 2024-11-04~2025-03-08 全在标准时间，UTC=本地+5h（shipments 的时间一律是本地时间）
+  detect_sql: SELECT COUNT(*) AS n FROM orders WHERE source = 'WEB'
+- id: D8
+  title: 孤儿外键，未声明约束
+  tables:
+  - orders
+  - customers
+  columns:
+  - orders.customer_id
+  naive_failure: INNER JOIN orders 到 customers，已删除账号的订单静默消失。
+  harness_tool: infer_joins
+  detect_sql: SELECT COUNT(*) AS n FROM orders o LEFT JOIN customers c ON o.customer_id = c.customer_id WHERE c.customer_id IS NULL
+- id: D9
+  title: 枚举值超出文档范围
+  tables:
+  - returns
+  columns:
+  - returns.reason_code
+  naive_failure: COLUMN COMMENT 只写了 1-4，模型自信地解释 5-9（实际为遗留系统代码）。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM returns WHERE reason_code > 4
+- id: D10
+  title: 金额单位混用
+  tables:
+  - payments
+  columns:
+  - payments.amount
+  - payments.gateway
+  naive_failure: gateway='LEGACY' 的支付金额单位是分（cents），STRIPE 是美元，直接 SUM 会虚高约 30 倍。
+  harness_tool: resolve_term
+  detect_sql: SELECT COUNT(*) AS n FROM payments WHERE gateway = 'LEGACY'
+controls:
+  note: 'Keep clean questions (defect_ids: []) so the harness is checked for hurting simple cases.'

@@ -1,0 +1,218 @@
+# 31 questions: Q01-Q25 defect-focused, C01-C06 controls. Gold answers verified against MySQL for dataset v1.0.0.
+questions:
+- id: Q01
+  defect_ids:
+  - D1
+  question: 有多少位用户写过评价？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN reviews r ON r.reviewer_id = u.user_id
+  naive_sql: SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN reviews r ON r.user_id = u.user_id
+  notes: reviews 的用户列叫 reviewer_id
+- id: Q02
+  defect_ids:
+  - D1
+  question: 照片最多的前 3 个地点是哪些？（只统计现存地点；同数按地点 ID 升序）
+  answer_type: table
+  gold_sql: SELECT p.place_id FROM places p JOIN photos ph ON ph.poi_id = p.place_id GROUP BY p.place_id ORDER BY COUNT(*) DESC, p.place_id LIMIT 3
+  naive_sql: SELECT p.place_id FROM places p JOIN photos ph ON ph.place_id = p.place_id GROUP BY p.place_id ORDER BY COUNT(*) DESC, p.place_id LIMIT 3
+  notes: photos 的地点列叫 poi_id
+- id: Q03
+  defect_ids:
+  - D1
+  question: 有多少个不同的地点被用户举报过？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT p.place_id) FROM places p JOIN flags f ON f.listing_id = p.place_id
+  naive_sql: SELECT COUNT(DISTINCT p.place_id) FROM places p JOIN flags f ON f.place_id = p.place_id
+- id: Q04
+  defect_ids:
+  - D2
+  question: 营业中（OPEN）的地点有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM places WHERE status = 'OPEN'
+  naive_sql: SELECT COUNT(*) FROM places WHERE status = 'active'
+  notes: 模型把 ads 的取值套到 places 上
+- id: Q05
+  defect_ids:
+  - D2
+  question: 生效中（active）的广告有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM ads WHERE status = 'active'
+  naive_sql: SELECT COUNT(*) FROM ads WHERE status = 'OPEN'
+- id: Q06
+  defect_ids:
+  - D3
+  question: 评价数最多的前 10 个地点是哪些？（只统计现存地点；同数按地点 ID 升序）
+  answer_type: table
+  gold_sql: SELECT p.place_id FROM places p JOIN reviews r ON r.place_ref = p.place_id GROUP BY p.place_id ORDER BY COUNT(*) DESC, p.place_id LIMIT 10
+  naive_sql: SELECT place_id FROM places ORDER BY review_count DESC, place_id LIMIT 10
+  notes: places.review_count 是过期缓存
+- id: Q07
+  defect_ids:
+  - D3
+  - D5
+  question: 至少有 15 条有效评分的地点里，平均评分最高的前 5 个是哪些？（同分按地点 ID 升序）
+  answer_type: table
+  gold_sql: SELECT place_ref FROM reviews WHERE rating REGEXP '^-?[0-9]+(\\.[0-9]+)?$' GROUP BY place_ref HAVING COUNT(*) >= 15 ORDER BY AVG(CAST(rating AS DECIMAL(4,2))) DESC, place_ref LIMIT 5
+  naive_sql: SELECT place_id FROM places WHERE review_count >= 15 ORDER BY avg_rating DESC, place_id LIMIT 5
+  notes: places.avg_rating 是过期缓存
+- id: Q08
+  defect_ids:
+  - D4
+  question: 目前正常营业（OPEN）的地点有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM places WHERE status = 'OPEN'
+  naive_sql: SELECT COUNT(*) FROM places WHERE closed_date IS NULL
+  notes: 暂停营业和缺关闭日期的永久关闭地点 closed_date 也为空
+- id: Q09
+  defect_ids:
+  - D4
+  question: 已永久关闭但没有关闭日期记录的地点有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM places WHERE status = 'CLOSED_PERMANENTLY' AND closed_date IS NULL
+  naive_sql: SELECT COUNT(*) FROM places WHERE closed_date IS NULL
+- id: Q10
+  defect_ids:
+  - D5
+  question: 所有评价的平均评分是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(rating AS DECIMAL(4,2))) FROM reviews WHERE rating REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(rating) FROM reviews
+- id: Q11
+  defect_ids:
+  - D5
+  question: Cafe 类地点的评价平均评分是多少？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(r.rating AS DECIMAL(4,2))) FROM reviews r JOIN places p ON p.place_id = r.place_ref JOIN categories c ON c.category_id = p.category_id WHERE c.name = 'Cafe' AND r.rating REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(r.rating) FROM reviews r JOIN places p ON p.place_id = r.place_ref JOIN categories c ON c.category_id = p.category_id WHERE c.name = 'Cafe'
+- id: Q12
+  defect_ids:
+  - D5
+  question: 座位数最多的地点有多少个座位？
+  answer_type: scalar
+  gold_sql: SELECT MAX(CAST(seating_capacity AS UNSIGNED)) FROM places WHERE seating_capacity REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT MAX(seating_capacity) FROM places
+  notes: 文本比较：'99' 大于 '220'
+- id: Q13
+  defect_ids:
+  - D6
+  question: 一共有多少个不同的地点？（同名同地址视为同一个）
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM (SELECT name, address FROM places GROUP BY name, address) t
+  naive_sql: SELECT COUNT(*) FROM places
+- id: Q14
+  defect_ids:
+  - D6
+  question: 有评价的不同地点（同名同地址视为同一个）有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM (SELECT p.name, p.address FROM places p JOIN reviews r ON r.place_ref = p.place_id GROUP BY p.name, p.address) t
+  naive_sql: SELECT COUNT(DISTINCT p.place_id) FROM places p JOIN reviews r ON r.place_ref = p.place_id
+- id: Q15
+  defect_ids:
+  - D6
+  question: 哪些地点（名称+地址）有多个登记记录？（按名称、地址升序）
+  answer_type: table
+  gold_sql: SELECT name, address FROM places GROUP BY name, address HAVING COUNT(*) > 1 ORDER BY name, address
+  naive_sql: SELECT name, address FROM places GROUP BY place_id, name, address HAVING COUNT(*) > 1 ORDER BY name, address
+- id: Q16
+  defect_ids:
+  - D7
+  question: 2024-12-29（本地日期）当天有多少条评价？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM reviews WHERE DATE(DATE_SUB(created_at, INTERVAL IF(source='MOBILE',5,0) HOUR)) = '2024-12-29'
+  naive_sql: SELECT COUNT(*) FROM reviews WHERE DATE(created_at) = '2024-12-29'
+- id: Q17
+  defect_ids:
+  - D7
+  question: 2025-01-21（本地日期）当天，本地时间 20 点及以后有多少条评价？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM reviews WHERE DATE(DATE_SUB(created_at, INTERVAL IF(source='MOBILE',5,0) HOUR)) = '2025-01-21' AND HOUR(DATE_SUB(created_at, INTERVAL IF(source='MOBILE',5,0) HOUR)) >= 20
+  naive_sql: SELECT COUNT(*) FROM reviews WHERE DATE(created_at) = '2025-01-21' AND HOUR(created_at) >= 20
+- id: Q18
+  defect_ids:
+  - D8
+  question: 一共有多少条评价？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM reviews
+  naive_sql: SELECT COUNT(*) FROM reviews r JOIN places p ON p.place_id = r.place_ref
+  notes: 已删除地点的评价被 INNER JOIN 丢掉
+- id: Q19
+  defect_ids:
+  - D8
+  question: 有多少条评价找不到对应的地点？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM reviews r LEFT JOIN places p ON p.place_id = r.place_ref WHERE p.place_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM reviews r JOIN places p ON p.place_id = r.place_ref WHERE p.place_id IS NULL
+- id: Q20
+  defect_ids:
+  - D9
+  question: 按举报原因代码（reason_code）统计各代码的举报数。
+  answer_type: table
+  gold_sql: SELECT reason_code, COUNT(*) FROM flags GROUP BY reason_code
+  naive_sql: SELECT reason_code, COUNT(*) FROM flags WHERE reason_code BETWEEN 1 AND 4 GROUP BY reason_code
+  notes: 只信文档 1-4，漏掉 5-9
+- id: Q21
+  defect_ids:
+  - D9
+  question: 举报原因代码为 7 的举报有多少条？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM flags WHERE reason_code = 7
+  notes: 代码 5-9 是遗留系统代码，glossary 应说明含义未知
+- id: Q22
+  defect_ids:
+  - D10
+  question: 生效中（active）广告的总花费是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN billing_system = 'LEGACY' THEN spend / 100 ELSE spend END) FROM ads WHERE status = 'active'
+  naive_sql: SELECT SUM(spend) FROM ads WHERE status = 'active'
+- id: Q23
+  defect_ids:
+  - D10
+  question: 平均每条广告的花费是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CASE WHEN billing_system = 'LEGACY' THEN spend / 100 ELSE spend END) FROM ads
+  naive_sql: SELECT AVG(spend) FROM ads
+- id: Q24
+  defect_ids:
+  - D2
+  - D10
+  question: 已结束（ended）广告的总花费是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN billing_system = 'LEGACY' THEN spend / 100 ELSE spend END) FROM ads WHERE status = 'ended'
+  naive_sql: SELECT SUM(spend) FROM ads WHERE status = 'ended'
+- id: Q25
+  defect_ids:
+  - D10
+  question: 按美元计，花费最高的 3 条广告是哪些？（同额按广告号升序）
+  answer_type: table
+  gold_sql: SELECT ad_id FROM ads ORDER BY CASE WHEN billing_system = 'LEGACY' THEN spend / 100 ELSE spend END DESC, ad_id LIMIT 3
+  naive_sql: SELECT ad_id FROM ads ORDER BY spend DESC, ad_id LIMIT 3
+- id: C01
+  defect_ids: []
+  question: 一共有多少个地点类别？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM categories
+- id: C02
+  defect_ids: []
+  question: 一共有多少个街区（neighborhoods）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM neighborhoods
+- id: C03
+  defect_ids: []
+  question: 一共有多少位商家（owners）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM owners
+- id: C04
+  defect_ids: []
+  question: 周日（weekday = 0）有营业时间记录的地点有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT place_id) FROM opening_hours WHERE weekday = 0
+- id: C05
+  defect_ids: []
+  question: 大小达到 2000 KB 及以上的照片有多少张？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM photos WHERE size_kb >= 2000
+- id: C06
+  defect_ids: []
+  question: 常住城市是 Boston 的用户有多少位？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM users WHERE home_city = 'Boston'
