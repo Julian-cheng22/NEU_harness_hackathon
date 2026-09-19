@@ -3,6 +3,9 @@
 A **harness** that helps a small model answer analytical questions correctly over
 messy internal company data.
 
+**[See the result →](https://usp787.github.io/NEU_harness_hackathon/)** — the measured
+baseline-vs-harness comparison, every question one click from its SQL.
+
 ## The thesis
 
 Most text-to-SQL failure on real company data is not a SQL-syntax problem. It is a
@@ -233,6 +236,11 @@ sparse-MoE architecture did not buy extra decode speed here. Plan accordingly.
 > Presenting this? **[`DEMO.md`](DEMO.md)** is the runbook: pre-flight checklist,
 > which questions to run live, the numbers to quote, and what to do when a piece
 > is down.
+>
+> Just want to look at the result? It is published at
+> **<https://usp787.github.io/NEU_harness_hackathon/>** — no clone, no Docker, no
+> model. **[`TRY_IT.md`](TRY_IT.md)** is the reviewer's guide to what is on it,
+> including why the live panel is greyed out there.
 
 One page, two independent halves.
 
