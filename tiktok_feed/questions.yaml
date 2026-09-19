@@ -1,0 +1,216 @@
+# 31 questions: Q01-Q25 defect-focused, C01-C06 controls. Gold answers verified against MySQL for dataset v1.0.0.
+questions:
+- id: Q01
+  defect_ids:
+  - D1
+  question: 有多少位用户点过赞？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN likes l ON l.viewer_id = u.user_id
+  naive_sql: SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN likes l ON l.user_id = u.user_id
+  notes: likes 的用户列叫 viewer_id
+- id: Q02
+  defect_ids:
+  - D1
+  question: 发表评论最多的前 3 位用户是谁？（同数按用户 ID 升序）
+  answer_type: table
+  gold_sql: SELECT u.user_id FROM users u JOIN comments c ON c.commenter_id = u.user_id GROUP BY u.user_id ORDER BY COUNT(*) DESC, u.user_id LIMIT 3
+  naive_sql: SELECT u.user_id FROM users u JOIN comments c ON c.user_id = u.user_id GROUP BY u.user_id ORDER BY COUNT(*) DESC, u.user_id LIMIT 3
+- id: Q03
+  defect_ids:
+  - D1
+  question: 有多少位用户看过视频（有展示记录）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN impressions i ON i.uid = u.user_id
+  naive_sql: SELECT COUNT(DISTINCT u.user_id) FROM users u JOIN impressions i ON i.user_id = u.user_id
+- id: Q04
+  defect_ids:
+  - D2
+  question: 已发布（PUBLISHED）的视频有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM videos WHERE status = 'PUBLISHED'
+  naive_sql: SELECT COUNT(*) FROM videos WHERE status = 'active'
+  notes: 模型把 promotions 的取值套到 videos 上
+- id: Q05
+  defect_ids:
+  - D2
+  question: 生效中（active）的推广有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM promotions WHERE status = 'active'
+  naive_sql: SELECT COUNT(*) FROM promotions WHERE status = 'PUBLISHED'
+- id: Q06
+  defect_ids:
+  - D3
+  question: 实际点赞数最多的前 10 个视频是哪些？（只统计现存视频；同数按视频 ID 升序）
+  answer_type: table
+  gold_sql: SELECT v.video_id FROM videos v JOIN likes l ON l.video_id = v.video_id GROUP BY v.video_id ORDER BY COUNT(*) DESC, v.video_id LIMIT 10
+  naive_sql: SELECT video_id FROM videos ORDER BY like_count DESC, video_id LIMIT 10
+  notes: videos.like_count 是过期缓存
+- id: Q07
+  defect_ids:
+  - D3
+  question: 粉丝最多的前 10 位创作者是谁？（同数按创作者 ID 升序）
+  answer_type: table
+  gold_sql: SELECT c.creator_id FROM creators c JOIN follows f ON f.creator_id = c.creator_id GROUP BY c.creator_id ORDER BY COUNT(*) DESC, c.creator_id LIMIT 10
+  naive_sql: SELECT creator_id FROM creators ORDER BY follower_count DESC, creator_id LIMIT 10
+  notes: creators.follower_count 是过期缓存
+- id: Q08
+  defect_ids:
+  - D4
+  question: 目前公开可见（已发布）的视频有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM videos WHERE status = 'PUBLISHED'
+  naive_sql: SELECT COUNT(*) FROM videos WHERE removed_at IS NULL
+  notes: 私密和旧系统下架的视频 removed_at 也为空
+- id: Q09
+  defect_ids:
+  - D4
+  question: 已被删除（REMOVED）但没有删除时间记录的视频有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM videos WHERE status = 'REMOVED' AND removed_at IS NULL
+  naive_sql: SELECT COUNT(*) FROM videos WHERE removed_at IS NULL
+- id: Q10
+  defect_ids:
+  - D5
+  question: 视频的平均时长是多少秒？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(duration_sec AS DECIMAL(6,2))) FROM videos WHERE duration_sec REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(duration_sec) FROM videos
+- id: Q11
+  defect_ids:
+  - D5
+  question: 最长的视频有多少秒？
+  answer_type: scalar
+  gold_sql: SELECT MAX(CAST(duration_sec AS DECIMAL(6,2))) FROM videos WHERE duration_sec REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT MAX(duration_sec) FROM videos
+  notes: 文本比较：'99' 大于 '180'
+- id: Q12
+  defect_ids:
+  - D5
+  question: comedy 类视频的平均时长是多少秒？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CAST(duration_sec AS DECIMAL(6,2))) FROM videos WHERE category = 'comedy' AND duration_sec REGEXP '^-?[0-9]+(\\.[0-9]+)?$'
+  naive_sql: SELECT AVG(duration_sec) FROM videos WHERE category = 'comedy'
+- id: Q13
+  defect_ids:
+  - D6
+  question: 一共有多少位不同的真人用户？（同一 device_id 视为同一人）
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT device_id) FROM users
+  naive_sql: SELECT COUNT(*) FROM users
+- id: Q14
+  defect_ids:
+  - D6
+  question: 点过赞的不同真人用户（同一 device_id 视为同一人）有多少位？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(DISTINCT u.device_id) FROM users u JOIN likes l ON l.viewer_id = u.user_id
+  naive_sql: SELECT COUNT(DISTINCT l.viewer_id) FROM likes l
+- id: Q15
+  defect_ids:
+  - D6
+  question: 哪些设备（device_id）注册了多个账号？（按 device_id 升序）
+  answer_type: table
+  gold_sql: SELECT device_id FROM users GROUP BY device_id HAVING COUNT(*) > 1 ORDER BY device_id
+  naive_sql: SELECT device_id FROM users GROUP BY user_id, device_id HAVING COUNT(*) > 1 ORDER BY device_id
+- id: Q16
+  defect_ids:
+  - D7
+  question: 2025-02-13（本地日期）当天有多少次视频展示？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM impressions WHERE DATE(DATE_SUB(shown_at, INTERVAL IF(source='CLIENT',5,0) HOUR)) = '2025-02-13'
+  naive_sql: SELECT COUNT(*) FROM impressions WHERE DATE(shown_at) = '2025-02-13'
+- id: Q17
+  defect_ids:
+  - D7
+  question: 2025-01-14（本地日期）当天，本地时间 20 点及以后有多少次视频展示？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM impressions WHERE DATE(DATE_SUB(shown_at, INTERVAL IF(source='CLIENT',5,0) HOUR)) = '2025-01-14' AND HOUR(DATE_SUB(shown_at, INTERVAL IF(source='CLIENT',5,0) HOUR)) >= 20
+  naive_sql: SELECT COUNT(*) FROM impressions WHERE DATE(shown_at) = '2025-01-14' AND HOUR(shown_at) >= 20
+- id: Q18
+  defect_ids:
+  - D8
+  question: 一共有多少条点赞记录？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM likes
+  naive_sql: SELECT COUNT(*) FROM likes l JOIN videos v ON v.video_id = l.video_id
+  notes: 已删除视频的点赞被 INNER JOIN 丢掉
+- id: Q19
+  defect_ids:
+  - D8
+  question: 有多少条点赞找不到对应的视频？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM likes l LEFT JOIN videos v ON v.video_id = l.video_id WHERE v.video_id IS NULL
+  naive_sql: SELECT COUNT(*) FROM likes l JOIN videos v ON v.video_id = l.video_id WHERE v.video_id IS NULL
+- id: Q20
+  defect_ids:
+  - D9
+  question: 按举报原因代码（reason_code）统计各代码的举报数。
+  answer_type: table
+  gold_sql: SELECT reason_code, COUNT(*) FROM reports GROUP BY reason_code
+  naive_sql: SELECT reason_code, COUNT(*) FROM reports WHERE reason_code BETWEEN 1 AND 4 GROUP BY reason_code
+  notes: 只信文档 1-4，漏掉 5-9
+- id: Q21
+  defect_ids:
+  - D9
+  question: 举报原因代码为 7 的举报有多少条？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM reports WHERE reason_code = 7
+  notes: 代码 5-9 是遗留系统代码，glossary 应说明含义未知
+- id: Q22
+  defect_ids:
+  - D10
+  question: 生效中（active）推广的总预算是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN billing_system = 'LEGACY' THEN budget / 100 ELSE budget END) FROM promotions WHERE status = 'active'
+  naive_sql: SELECT SUM(budget) FROM promotions WHERE status = 'active'
+- id: Q23
+  defect_ids:
+  - D10
+  question: 平均每个推广的预算是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT AVG(CASE WHEN billing_system = 'LEGACY' THEN budget / 100 ELSE budget END) FROM promotions
+  naive_sql: SELECT AVG(budget) FROM promotions
+- id: Q24
+  defect_ids:
+  - D2
+  - D10
+  question: 已结束（ended）推广的总预算是多少美元？
+  answer_type: scalar
+  gold_sql: SELECT SUM(CASE WHEN billing_system = 'LEGACY' THEN budget / 100 ELSE budget END) FROM promotions WHERE status = 'ended'
+  naive_sql: SELECT SUM(budget) FROM promotions WHERE status = 'ended'
+- id: Q25
+  defect_ids:
+  - D10
+  question: 按美元计，预算最大的 3 个推广是哪些？（同额按推广号升序）
+  answer_type: table
+  gold_sql: SELECT promo_id FROM promotions ORDER BY CASE WHEN billing_system = 'LEGACY' THEN budget / 100 ELSE budget END DESC, promo_id LIMIT 3
+  naive_sql: SELECT promo_id FROM promotions ORDER BY budget DESC, promo_id LIMIT 3
+- id: C01
+  defect_ids: []
+  question: 一共有多少位创作者？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM creators
+- id: C02
+  defect_ids: []
+  question: 一共有多少首配乐（sounds）？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM sounds
+- id: C03
+  defect_ids: []
+  question: category 为 comedy 的视频一共有多少个？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM videos WHERE category = 'comedy'
+- id: C04
+  defect_ids: []
+  question: 字数（text_len）达到 100 及以上的评论有多少条？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM comments WHERE text_len >= 100
+- id: C05
+  defect_ids: []
+  question: 来自美国（US）的创作者有多少位？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM creators WHERE country = 'US'
+- id: C06
+  defect_ids: []
+  question: 时长超过 30 秒的配乐有多少首？
+  answer_type: scalar
+  gold_sql: SELECT COUNT(*) FROM sounds WHERE duration_sec > 30
