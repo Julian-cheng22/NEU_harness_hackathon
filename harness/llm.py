@@ -1,16 +1,20 @@
 """
 Provider-agnostic LLM client.
 
-Two backends behind one interface, selected by HARNESS_LLM:
+Backends behind one interface, selected by HARNESS_LLM:
 
-  local   llama.cpp's OpenAI-compatible server, running Qwen3.5-9B Q4_K_M
-          on the RTX 4060. No network, no cost, no rate limit.
-  gemini  Gemini 3 Flash. The demo-day insurance policy.
+  local      llama.cpp's OpenAI-compatible server, running Qwen3.5-9B Q4_K_M
+             on the RTX 4060. No network, no cost, no rate limit. This is the
+             provider every committed eval result was measured on.
+  anthropic  Claude Haiku 4.5. Cloud fallback when the GPU path will not come
+             up; needs ANTHROPIC_API_KEY.
+  gemini     FROZEN, see below. Kept in the tree, refuses to run.
 
 The point of the abstraction is not elegance -- it is that at a hackathon the
 local model WILL have a bad moment, and swapping providers must be one env var
 and zero code edits. It also makes the strongest version of our claim testable:
-run the same eval on both and show the harness lifts a 9B toward Flash.
+run the same eval on two providers and show the harness lifts a 9B toward a
+frontier model.
 
 THINKING MODE
 -------------
@@ -19,6 +23,13 @@ looks like a hang, and it burns the context budget we need for schema cards.
 LOCAL_ENABLE_THINKING=false (the default) disables it via the chat-template
 kwarg AND strips any stray block that leaks through, because template support
 varies by llama.cpp build and we cannot afford to find that out live.
+
+GEMINI IS FROZEN (2026-09-18)
+-----------------------------
+A Google API policy change put the Gemini path out of scope for this project.
+The adapter is deliberately NOT deleted -- the thought_signature handling and
+the message/tool conversion are the hard-won part and we want them back if the
+freeze lifts -- but constructing GeminiLLM now raises. See `gemini_frozen()`.
 """
 
 from __future__ import annotations
@@ -145,10 +156,36 @@ class LocalLLM:
 
 
 # ---------------------------------------------------------------------------
-# Fallback: Gemini
+# Gemini -- FROZEN 2026-09-18
 # ---------------------------------------------------------------------------
+GEMINI_FROZEN_ON = "2026-09-18"
+
+GEMINI_FROZEN_MESSAGE = (
+    f"The Gemini backend is FROZEN (since {GEMINI_FROZEN_ON}) following a Google "
+    "API policy change; this project no longer runs against it. Use "
+    "HARNESS_LLM=local (llama.cpp / Qwen3.5-9B -- what every committed eval "
+    "result was measured on) or HARNESS_LLM=anthropic. The adapter is still in "
+    "harness/llm.py: set GEMINI_UNFREEZE=true to thaw it deliberately."
+)
+
+
+def gemini_frozen() -> bool:
+    """True unless the operator has explicitly thawed the backend.
+
+    One env var, checked at construction rather than at import, so a run that
+    has no business touching Gemini cannot reach it by accident -- including
+    the web server's health probe and anything that constructs GeminiLLM
+    directly instead of going through from_env().
+    """
+    return os.getenv("GEMINI_UNFREEZE", "").strip().lower() not in ("1", "true", "yes")
+
+
 class GeminiLLM:
-    """Gemini backend.
+    """Gemini backend. FROZEN -- see `gemini_frozen()` above.
+
+    Kept as documentation of a working adapter, not as a live path. Everything
+    below this docstring is unchanged from when it last ran green; only the
+    guard at the top of __init__ is new.
 
     Like the Anthropic one, this is a real ADAPTER. The rest of the harness
     speaks the OpenAI message/tool shape, and Gemini differs in three ways that
@@ -182,6 +219,11 @@ class GeminiLLM:
 
     def __init__(self, api_key: str | None = None, model: str | None = None,
                  max_retries: int | None = None):
+        # Checked before the import so a frozen run reports the freeze, not a
+        # confusing ModuleNotFoundError from an uninstalled google-genai.
+        if gemini_frozen():
+            raise RuntimeError(GEMINI_FROZEN_MESSAGE)
+
         from google import genai  # imported lazily: local-only runs need no key
 
         key = api_key or os.getenv("GEMINI_API_KEY")
@@ -532,20 +574,23 @@ def from_env() -> LLM:
     if provider == "local":
         return LocalLLM()
     if provider == "gemini":
+        # Still routed rather than dropped, so a stale HARNESS_LLM=gemini in
+        # someone's .env gets the freeze notice instead of "Unknown provider".
         return GeminiLLM()
     if provider in ("anthropic", "claude"):
         return AnthropicLLM()
     raise ValueError(
-        f"Unknown HARNESS_LLM={provider!r}; expected 'local', 'gemini' or 'anthropic'.")
+        f"Unknown HARNESS_LLM={provider!r}; expected 'local' or 'anthropic' "
+        f"('gemini' is frozen).")
 
 
 def _main() -> int:
     """Pre-flight the configured provider:  python -m harness.llm
 
-    Checks the credential and, for Gemini, lists the models the key can
-    actually reach -- model ids change often enough that guessing one and
-    discovering it mid-eval is a waste of a demo slot. Costs no generation
-    quota. Never prints the key.
+    Checks the credential and, where the provider offers a metadata call, that
+    the configured model is actually reachable -- model ids change often enough
+    that guessing one and discovering it mid-eval is a waste of a demo slot.
+    Costs no generation quota. Never prints the key.
     """
     from pathlib import Path
 

@@ -170,8 +170,8 @@ Pick a model with `HARNESS_LLM`:
 | Value | Backend | Needs |
 |---|---|---|
 | `local` | llama.cpp on :8080 (Qwen3.5-9B) | the GGUF + a running `llama-server` |
-| `gemini` | Gemini Flash (`GEMINI_MODEL`, default `gemini-3.8-flash`) | `GEMINI_API_KEY` |
 | `anthropic` | Claude Haiku 4.5 / Sonnet 5 | `ANTHROPIC_API_KEY` |
+| ~~`gemini`~~ | **frozen 2026-09-18** — refuses to start | — |
 
 Pre-flight whichever you picked before you need it:
 
@@ -179,30 +179,25 @@ Pre-flight whichever you picked before you need it:
 .venv\Scripts\python -m harness.llm
 ```
 
-It validates the credential and, for Gemini, lists the models your key can
-actually reach. That call spends no generation quota and never prints the key.
+It validates the credential and confirms the configured model is reachable.
+That call spends no generation quota and never prints the key.
 
-### Gemini keys
+### Gemini is frozen
 
-**Create the key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey),
-not in the Cloud console's Credentials page.** Since September 2026 the Gemini
-API rejects the legacy *standard* keys that page issues. AI Studio issues
-*auth keys*: bound to a service account, restricted to the Gemini API by
-default, with faster leaked-key enforcement. Nothing changes in how the key is
-passed — still `GEMINI_API_KEY`.
+As of **2026-09-18** the Gemini path is out of scope following a Google API
+policy change. `HARNESS_LLM=gemini` now raises immediately with an explanation
+instead of calling the API, and the web dashboard's health banner says the same
+thing in one sentence.
 
-Two things that cost real money if you assume otherwise:
+The adapter itself was **not deleted**. `GeminiLLM` in `harness/llm.py` is
+intact — the `thought_signature` round-trip and the OpenAI→Gemini
+message/tool conversion are the expensive part of that work and we want them
+back if the freeze lifts. To thaw it deliberately, set `GEMINI_UNFREEZE=true`
+alongside `HARNESS_LLM=gemini` and re-read the current terms first.
 
-- The **$300 Cloud Welcome / free-trial credit does not cover Gemini API
-  usage** for billing accounts created after 2026-03-02. Linking billing means
-  Gemini calls hit your payment method from the first request. The free tier
-  needs no billing account and is ample for a 31-question run — that is what
-  this project assumes.
-- Rate limits are **per project, not per key.** A second key in the same
-  project buys no extra quota.
-
-Model ids move quickly and availability varies by tier, so treat the default as
-a starting point and confirm with `python -m harness.llm`.
+No measured result in this repo depends on Gemini: every committed run in
+`eval/out/` is `local` (Qwen3.5-9B on the RTX 4060), and
+`review_runtime_20260914/` states explicitly that no paid inference was used.
 
 ### Local model
 
@@ -234,6 +229,10 @@ sparse-MoE architecture did not buy extra decode speed here. Plan accordingly.
 .venv\Scripts\python -m web.build_data     # bake eval results into the page
 .venv\Scripts\python -m web.server         # http://127.0.0.1:8000
 ```
+
+> Presenting this? **[`DEMO.md`](DEMO.md)** is the runbook: pre-flight checklist,
+> which questions to run live, the numbers to quote, and what to do when a piece
+> is down.
 
 One page, two independent halves.
 
